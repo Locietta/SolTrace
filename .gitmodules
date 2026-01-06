@@ -1,0 +1,6 @@
+[submodule "external/lk"]
+	path = external/lk
+	url = git@github.com:NREL/lk.git
+[submodule "external/wex"]
+	path = external/wex
+	url = git@github.com:NREL/wex.git
