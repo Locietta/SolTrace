@@ -2,7 +2,12 @@
   "dependencies": [
     {
       "name": "wxwidgets",
-      "features": ["webview"]
+      "features": ["webview"],
+      "platform": "windows"
+    },
+    {
+      "name": "wxwidgets",
+      "platform": "!windows"
     }
   ],
   "overrides": [

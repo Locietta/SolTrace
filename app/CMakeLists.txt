@@ -148,7 +148,10 @@ endif()
 #####################################################################################################################
 
 target_link_libraries(SolTrace coretrace wex lk)
-target_link_libraries(SolTrace wx::core wx::xml wx::net wx::adv wx::propgrid wx::html wx::richtext wx::aui wx::stc wx::qa wx::webview)
+target_link_libraries(SolTrace wx::core wx::xml wx::net wx::adv wx::propgrid wx::html wx::richtext wx::aui wx::stc wx::qa)
+if (WIN32)
+	target_link_libraries(SolTrace wx::webview)
+endif()
 
 if (UNIX AND NOT APPLE)
 	target_link_libraries(SolTrace -ldl -lfontconfig)
