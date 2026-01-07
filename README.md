@@ -7,7 +7,7 @@ The desktop version of SolTrace for Windows or Linux builds from the following o
 
 * [LK](https://github.com/nrel/lk) is a scripting language that is integrated into SAM and allows users to add functionality to the program.
 
-* [wxWidgets](https://www.wxwidgets.org/) is a cross-platform graphical user interface platform used for SAM's user interface, and for the development tools included with SSC (SDKtool) and LK (LKscript). The current version of SAM uses wxWidgets 3.1.0.
+* [wxWidgets](https://www.wxwidgets.org/) is a cross-platform graphical user interface platform used for SAM's user interface, and for the development tools included with SSC (SDKtool) and LK (LKscript). SolTrace currently consumes wxWidgets 3.2.4 via [vcpkg](https://github.com/microsoft/vcpkg).
 
 * [WEX](https://github.com/nrel/wex) is a set of extensions to wxWidgets for custom user-interface elements used by SAM, and by LKscript and DView, which are integrated into SAM.
 
@@ -23,60 +23,55 @@ The API requires the compiled coretrace library. Project files for building this
 
 ## Steps for Building SolTrace
 
-These are the general steps you need to follow to set up your computer for developing SolTrace:
+These are the general steps you need to follow to set up your computer for developing SolTrace. The repository now uses CMake presets and vcpkg manifest mode to fetch all third-party dependencies (wxWidgets, PCRE2, curl, etc.), so you no longer need to build wxWidgets, LK, or WEX manually.
 
-1. Set up your development tools:
+1. Install development tools
 
-    * Windows: Visual Studio 2022 Community or other editions available at [https://www.visualstudio.com/](https://www.visualstudio.com/).
-    * Linux: g++ compiler available at [http://www.cprogramming.com/g++.html](http://www.cprogramming.com/g++.html) or as part of the Linux distribution.
+    * **Windows:** Visual Studio 2022 Community or other editions available at [https://www.visualstudio.com/](https://www.visualstudio.com/). Ensure that the "Desktop development with C++" workload is installed.
+    * **Linux:** g++ compiler available at [http://www.cprogramming.com/g++.html](http://www.cprogramming.com/g++.html) or as part of the Linux distribution.
+    * **macOS:** Xcode 14+
 
-2. Download and install CMake 3.28 or higher from [https://cmake.org/download/](https://cmake.org/download/) with the ```Add CMake to the System Path for ...``` option selected.
+2. Install [CMake 3.24 or newer](https://cmake.org/download/) and ensure it is on your `PATH`.
 
-3. Download the wxWidgets 3.2.4 source code for your operating system from [https://www.wxwidgets.org/downloads/](https://www.wxwidgets.org/downloads/).
+3. Install [vcpkg](https://learn.microsoft.com/vcpkg/get_started/get-started) in a convenient location and set the `VCPKG_ROOT` environment variable to that path.
 
-4. Build wxWidgets.
+4. Clone SolTrace **with submodules** so the `external/lk` and `external/wex` trees are available:
 
-5. In Windows, create the WXMSW3 environment variable on your computer to point to the wxWidgets installation folder, or Linux, create the dynamic link `/usr/<USERNAME>/local/bin/wx-config-3` to point to `/path/to/wxWidgets/bin/wx-config`.
-
-6. As you did for wxWidgets, clone (download) the LK and WEX repositories and then (Windows only) create an environment variable pointing to the project folder. 
-
-    <table>
-    <tr><th>Project</th><th>Repository URL</th><th>Windows Environment Variable</th><th>Environment Variable Path</th></tr>
-    <tr><td>LK</td><td>https://github.com/NREL/lk</td><td>LKDIR</td><td>/path/to/lk</td></tr>
-    <tr><td>WEX</td><td>https://github.com/NREL/wex</td><td>WEXDIR</td><td>/path/to/wex</td></tr>
-    </table>
-
-    Open a Git Bash window and navigate to the WEX directory. Check out the following tag:
-
+    ```bash
+    git clone --recurse-submodules https://github.com/NREL/SolTrace.git
+    cd SolTrace
     ```
-    cd wex
-    git checkout tags/2021.12.02.r2.ssc.274
+    If you have already cloned the repository without submodules, you can initialize them with:
+
+    ```bash
+    git submodule update --init --recursive
     ```
 
+5. Configure with one of the supplied CMake presets. Presets automatically enable manifest-mode vcpkg, set the required environment variables (`LKDIR`, `WEXDIR`), and choose an appropriate triplet. Common examples:
 
-7. Run CMake to create the project build files
-    1. Copy the file ```parent-dir-CMakeLists.txt``` into the parent directory also containing ```soltrace/ lk/ wex/``` and ```wxwidgets-3.x.x/``` folders.
-    
-    2. Rename this file to ```CMakeLists.txt``` before running cmake. You may need to temporarily rename any other file in this directory with the same name. 
-    
-        E.g., the file should be at ```C:/stdev/CMakeLists.txt```
+    * Windows GUI build: `cmake --preset windows-ninja`
+    * Windows core-only build: `cmake --preset windows-core`
+    * Linux GUI Release: `cmake --preset linux-ninja-release`
+    * macOS GUI Debug: `cmake --preset macos-xcode-debug`
 
-    3. Create a directory in the main parent folder to store the build files. 
-    E.g., ```C:/stdev/build-soltrace/```
-    
-    4. Open a shell or command window, and navigate to the build folder you just created. 
+    The first configure run will trigger `vcpkg install` and may take a few minutes while dependencies such as wxWidgets 3.2.4 are compiled.
 
-    5. Copy the following cmake command to the shell and run. Replace the cmake target with a [supported generator](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html#manual:cmake-generators(7))
-    
-        ```
-        cmake -G "Visual Studio 17 2022" -DCMAKE_CONFIGURATION_TYPES="Debug;Release" -DCMAKE_SYSTEM_VERSION=10.0 -DSAM_SKIP_TOOLS=1 .. 
-        ```
+6. Build the desired configuration with the matching build preset, for example:
 
-    6. Confirm the project files built. If running visual studio, you should see a ```soltrace_ui.sln``` file in the build-soltrace/ directory.
-    
-    7. Build all files. The output is stored in the soltrace repository folder, e.g., ```C:/stdev/soltrace/app/deploy/soltrace.exe```. 
+    ```bash
+    cmake --build --preset windows-ninja-debug
+    cmake --build --preset windows-ninja-release
+    ```
 
-        Note that output is NOT stored in the ```build-soltrace/``` directory!
+    The GUI executable is written to `app/deploy/x64/SolTrace.exe` on Windows and to `app/deploy` on Linux/macOS. To build only the `coretrace` library, use the `*-core-*` presets (e.g., `cmake --build --preset windows-core-release`).
+
+7. (Optional) Run the unit tests after building:
+
+    ```bash
+    ctest --preset windows-ninja-debug
+    ```
+
+For more details on configuring or adding new presets, open `CMakePresets.json` in the repository root.
 
 ## Contributing
 
