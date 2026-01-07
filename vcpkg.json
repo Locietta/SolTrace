@@ -1,0 +1,14 @@
+{
+  "dependencies": [
+    {
+      "name": "wxwidgets",
+      "features": ["webview"]
+    }
+  ],
+  "overrides": [
+    {
+      "name": "wxwidgets",
+      "version": "3.2.4"
+    }
+  ]
+}

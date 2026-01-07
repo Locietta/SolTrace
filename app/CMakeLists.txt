@@ -93,13 +93,11 @@ endif(MSVC)
 
 if (UNIX)
 	set(wxWidgets_CONFIG_EXECUTABLE /usr/local/bin/wx-config-3)
-	find_package(wxWidgets COMPONENTS qa aui richtext html propgrid adv net stc core xml base REQUIRED)
+	find_package(wxWidgets CONFIG COMPONENTS qa aui richtext html propgrid adv net stc core xml base REQUIRED)
 else()
 	set(wxWidgets_ROOT_DIR $ENV{WXMSW3})
-	find_package(wxWidgets COMPONENTS qa webview aui richtext html propgrid adv net stc core xml base scintilla REQUIRED)
+	find_package(wxWidgets CONFIG COMPONENTS qa webview aui richtext html propgrid adv net stc core xml base REQUIRED)
 endif()
-
-include(${wxWidgets_USE_FILE})
 
 
 #####################################################################################################################
@@ -150,7 +148,7 @@ endif()
 #####################################################################################################################
 
 target_link_libraries(SolTrace coretrace wex lk)
-target_link_libraries(SolTrace ${wxWidgets_LIBRARIES})
+target_link_libraries(SolTrace wx::core wx::xml wx::net wx::adv wx::propgrid wx::html wx::richtext wx::aui wx::stc wx::qa wx::webview)
 
 if (UNIX AND NOT APPLE)
 	target_link_libraries(SolTrace -ldl -lfontconfig)
@@ -159,10 +157,7 @@ endif()
 if (UNIX)
 	target_link_libraries(SolTrace -lm -lcurl)
 elseif (MSVC)
-	find_library( CURL_LIB
-			NAMES libcurl.lib
-			PATHS $ENV{WEXDIR}/build_resources/libcurl_ssl_x64/lib)
-	target_link_libraries(SolTrace ${CURL_LIB})
+	target_link_libraries(SolTrace $ENV{WEXDIR}/build_resources/libcurl_ssl_x64/lib/libcurl.lib)
 	target_link_libraries(SolTrace Winhttp)
 endif()
 

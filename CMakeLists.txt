@@ -1,9 +1,18 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.24)
 
-Project(soltrace_ui VERSION 1.0.0)
+project(soltrace_ui VERSION 3.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if(MSVC)
+	add_compile_options(/utf-8)
+endif()
+
+if(WIN32)
+	add_compile_definitions(_WINSOCKAPI_)
+	add_compile_definitions(UNICODE)
+endif()
 
 option(SOLTRACE_BUILD_GUI "Build the GUI parts of Soltrace" OFF)
 option(SOLTRACE_BUILD_CORETRACE "Build the coretrace library (ray tracing core)" ON)
@@ -14,8 +23,8 @@ enable_testing()
 
 add_subdirectory(coretrace)
 add_subdirectory(google-tests)
+add_subdirectory(external)
 
 if(SOLTRACE_BUILD_GUI)
 	add_subdirectory(app)
 endif()
-

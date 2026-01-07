@@ -1,0 +1,254 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "binaryDir": "build/${presetName}",
+      "environment": {
+        "LKDIR": "${sourceDir}/external/lk",
+        "WEXDIR": "${sourceDir}/external/wex"
+      },
+      "cacheVariables": {
+        "SAM_SKIP_TOOLS": "ON"
+      }
+    },
+    {
+      "name": "base-gui",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "SOLTRACE_BUILD_GUI": "ON"
+      }
+    },
+    {
+      "name": "base-debug",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "base-release",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "base-windows",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    },
+    {
+      "name": "base-linux",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
+      }
+    },
+    {
+      "name": "base-macos",
+      "hidden": true,
+      "inherits": "base",
+      "generator": "Xcode",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-osx"
+      }
+    },
+    {
+      "name": "windows-ninja",
+      "displayName": "Windows Ninja Multi-Config",
+      "description": "Ninja Multi-Config generator with GUI enabled.",
+      "inherits": ["base-windows", "base-gui"]
+    },
+    {
+      "name": "windows-core",
+      "displayName": "Windows Ninja Coretrace",
+      "description": "Ninja Multi-Config generator without GUI components.",
+      "inherits": "base-windows"
+    },
+    {
+      "name": "linux-ninja-release",
+      "displayName": "Linux Ninja Release",
+      "description": "Release build with Ninja and the vcpkg toolchain.",
+      "inherits": ["base-linux", "base-gui", "base-release"]
+    },
+    {
+      "name": "linux-ninja-debug",
+      "displayName": "Linux Ninja Debug",
+      "description": "Debug build with Ninja and the vcpkg toolchain.",
+      "inherits": ["base-linux", "base-gui", "base-debug"]
+    },
+    {
+      "name": "linux-core-release",
+      "displayName": "Linux Ninja Core Release",
+      "description": "Release build for coretrace only.",
+      "inherits": ["base-linux", "base-release"]
+    },
+    {
+      "name": "linux-core-debug",
+      "displayName": "Linux Ninja Core Debug",
+      "description": "Debug build for coretrace only.",
+      "inherits": ["base-linux", "base-debug"]
+    },
+    {
+      "name": "macos-xcode-debug",
+      "displayName": "macOS Xcode Debug",
+      "description": "Xcode generator (Debug) with GUI enabled.",
+      "inherits": ["base-macos", "base-gui", "base-debug"]
+    },
+    {
+      "name": "macos-xcode-release",
+      "displayName": "macOS Xcode Release",
+      "description": "Xcode generator (Release) with GUI enabled.",
+      "inherits": ["base-macos", "base-gui", "base-release"]
+    },
+    {
+      "name": "macos-core-debug",
+      "displayName": "macOS Core Debug",
+      "description": "Xcode generator (Debug) without GUI components.",
+      "inherits": ["base-macos", "base-debug"]
+    },
+    {
+      "name": "macos-core-release",
+      "displayName": "macOS Core Release",
+      "description": "Xcode generator (Release) without GUI components.",
+      "inherits": ["base-macos", "base-release"]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-ninja-debug",
+      "configurePreset": "windows-ninja",
+      "configuration": "Debug",
+      "displayName": "Build Windows Debug"
+    },
+    {
+      "name": "windows-ninja-release",
+      "configurePreset": "windows-ninja",
+      "configuration": "Release",
+      "displayName": "Build Windows Release"
+    },
+    {
+      "name": "windows-core-debug",
+      "configurePreset": "windows-core",
+      "configuration": "Debug",
+      "displayName": "Build Windows Core Debug"
+    },
+    {
+      "name": "windows-core-release",
+      "configurePreset": "windows-core",
+      "configuration": "Release",
+      "displayName": "Build Windows Core Release"
+    },
+    {
+      "name": "linux-ninja-debug",
+      "configurePreset": "linux-ninja-debug",
+      "displayName": "Build Linux Debug"
+    },
+    {
+      "name": "linux-ninja-release",
+      "configurePreset": "linux-ninja-release",
+      "displayName": "Build Linux Release"
+    },
+    {
+      "name": "linux-core-debug",
+      "configurePreset": "linux-core-debug",
+      "displayName": "Build Linux Core Debug"
+    },
+    {
+      "name": "linux-core-release",
+      "configurePreset": "linux-core-release",
+      "displayName": "Build Linux Core Release"
+    },
+    {
+      "name": "macos-xcode-debug",
+      "configurePreset": "macos-xcode-debug",
+      "displayName": "Build macOS Debug"
+    },
+    {
+      "name": "macos-xcode-release",
+      "configurePreset": "macos-xcode-release",
+      "displayName": "Build macOS Release"
+    },
+    {
+      "name": "macos-core-debug",
+      "configurePreset": "macos-core-debug",
+      "displayName": "Build macOS Core Debug"
+    },
+    {
+      "name": "macos-core-release",
+      "configurePreset": "macos-core-release",
+      "displayName": "Build macOS Core Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-ninja-debug",
+      "configurePreset": "windows-ninja",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-ninja-release",
+      "configurePreset": "windows-ninja",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-core-debug",
+      "configurePreset": "windows-core",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-core-release",
+      "configurePreset": "windows-core",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-ninja-debug",
+      "configurePreset": "linux-ninja-debug"
+    },
+    {
+      "name": "linux-ninja-release",
+      "configurePreset": "linux-ninja-release"
+    },
+    {
+      "name": "linux-core-debug",
+      "configurePreset": "linux-core-debug"
+    },
+    {
+      "name": "linux-core-release",
+      "configurePreset": "linux-core-release"
+    },
+    {
+      "name": "macos-xcode-debug",
+      "configurePreset": "macos-xcode-debug"
+    },
+    {
+      "name": "macos-xcode-release",
+      "configurePreset": "macos-xcode-release"
+    },
+    {
+      "name": "macos-core-debug",
+      "configurePreset": "macos-core-debug"
+    },
+    {
+      "name": "macos-core-release",
+      "configurePreset": "macos-core-release"
+    }
+  ]
+}
