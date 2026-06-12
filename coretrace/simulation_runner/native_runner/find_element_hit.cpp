@@ -18,19 +18,19 @@ namespace SolTrace::NativeRunner
 		const int nintelements,
 		const std::vector<void *> &sunint_elements,
 		const std::vector<void *> &reflint_elements,
-		// ray info
-		const int RayNumber,
-		const bool in_multi_hit_loop,
-		double (&PosRayStage)[3],
-		double (&CosRayStage)[3],
-		// outputs
-		double (&LastPosRaySurfElement)[3],
-		double (&LastCosRaySurfElement)[3],
-		double (&LastDFXYZ)[3],
-		uint_fast64_t &LastElementNumber,
-		uint_fast64_t &LastRayNumber,
-		double (&LastPosRaySurfStage)[3],
-		double (&LastCosRaySurfStage)[3],
+        // ray info
+        const int RayNumber,
+        const bool in_multi_hit_loop,
+        glm::dvec3 &PosRayStage,
+        glm::dvec3 &CosRayStage,
+        // outputs
+        glm::dvec3 &LastPosRaySurfElement,
+        glm::dvec3 &LastCosRaySurfElement,
+        glm::dvec3 &LastDFXYZ,
+        uint_fast64_t &LastElementNumber,
+        uint_fast64_t &LastRayNumber,
+        glm::dvec3 &LastPosRaySurfStage,
+        glm::dvec3 &LastCosRaySurfStage,
 		int &ErrorFlag,
 		int &LastHitBackSide,
 		bool &StageHit)
@@ -39,16 +39,16 @@ namespace SolTrace::NativeRunner
 		double LastPathLength = 1e99;
 		int HitBackSide = 0;
 		int InterceptFlag = 0;
-		double DFXYZ[3] = {0.0, 0.0, 0.0};
-		double PosRayElement[3] = {0.0, 0.0, 0.0};
-		double CosRayElement[3] = {0.0, 0.0, 0.0};
-		double PosRaySurfStage[3] = {0.0, 0.0, 0.0};
-		double CosRaySurfStage[3] = {0.0, 0.0, 0.0};
-		double PosRaySurfElement[3] = {0.0, 0.0, 0.0};
-		double CosRaySurfElement[3] = {0.0, 0.0, 0.0};
-		StageHit = false;
+        glm::dvec3 DFXYZ = glm::dvec3{0.0};
+        glm::dvec3 PosRayElement = glm::dvec3{0.0};
+        glm::dvec3 CosRayElement = glm::dvec3{0.0};
+        glm::dvec3 PosRaySurfStage = glm::dvec3{0.0};
+        glm::dvec3 CosRaySurfStage = glm::dvec3{0.0};
+        glm::dvec3 PosRaySurfElement = glm::dvec3{0.0};
+        glm::dvec3 CosRaySurfElement = glm::dvec3{0.0};
+        StageHit = false;
 
-		for (uint_fast64_t j = 0; j < nintelements; j++)
+        for (uint_fast64_t j = 0; j < nintelements; j++)
 		{
 			TElement *Element; // = Stage->ElementList[j];
 			if (i == 0 && !PT_override)
@@ -78,22 +78,26 @@ namespace SolTrace::NativeRunner
 			// 	continue;
 
 			//  {Transform ray to element[j] coord system of Stage[i]}
-			TransformToLocal(PosRayStage, CosRayStage,
-							 Element->Origin, Element->RRefToLoc,
-							 PosRayElement, CosRayElement);
+            Data::TransformToLocal(PosRayStage,
+                                   CosRayStage,
+                                   Element->Origin,
+                                   Element->RRefToLoc,
+                                   PosRayElement,
+                                   CosRayElement);
 
-			ErrorFlag = 0;
-			HitBackSide = 0;
-			InterceptFlag = 0;
+            ErrorFlag = 0;
+            HitBackSide = 0;
+            InterceptFlag = 0;
 			double PathLength = 0;
 
 			// increment position by tiny amount to get off the element
 			// if tracing to the same element
-			PosRayElement[0] = PosRayElement[0] + 1.0e-5 * CosRayElement[0];
-			PosRayElement[1] = PosRayElement[1] + 1.0e-5 * CosRayElement[1];
-			PosRayElement[2] = PosRayElement[2] + 1.0e-5 * CosRayElement[2];
+            PosRayElement = PosRayElement + 1.0e-5 * CosRayElement;
+            // PosRayElement[0] = PosRayElement[0] + 1.0e-5 * CosRayElement[0];
+            // PosRayElement[1] = PosRayElement[1] + 1.0e-5 * CosRayElement[1];
+            // PosRayElement[2] = PosRayElement[2] + 1.0e-5 * CosRayElement[2];
 
-			// {Determine if ray intersects element[j]; if so, Find intersection
+            // {Determine if ray intersects element[j]; if so, Find intersection
 			// point with surface of element[j] }
 			DetermineElementIntersectionNew(Element,
 											PosRayElement,
@@ -120,25 +124,28 @@ namespace SolTrace::NativeRunner
 					// 	Element->SurfaceIndex == 'r' ||
 					// 	Element->SurfaceIndex == 'R')
 					// TODO: Is this the correct thing to do?
-					if (PosRaySurfElement[2] <= Element->ZAperture)
-					{
-						StageHit = true;
+                    if (PosRaySurfElement.z <= Element->ZAperture)
+                    {
+                        StageHit = true;
 						LastPathLength = PathLength;
-						CopyVec3(LastPosRaySurfElement, PosRaySurfElement);
-						CopyVec3(LastCosRaySurfElement, CosRaySurfElement);
-						CopyVec3(LastDFXYZ, DFXYZ);
+                        LastPosRaySurfElement = PosRaySurfElement;
+                        LastCosRaySurfElement = CosRaySurfElement;
+                        LastDFXYZ = DFXYZ;
 						// LastElementNumber = ((i == 0 && !PT_override) ? Element->element_number : j + 1); // mjw change from j index to element id
 						LastElementNumber = Element->element_number;
 						LastRayNumber = RayNumber;
-						TransformToReference(PosRaySurfElement, CosRaySurfElement,
-											 Element->Origin, Element->RLocToRef,
-											 PosRaySurfStage, CosRaySurfStage);
+                        Data::TransformToReference(PosRaySurfElement,
+                                                   CosRaySurfElement,
+                                                   Element->Origin,
+                                                   Element->RLocToRef,
+                                                   PosRaySurfStage,
+                                                   CosRaySurfStage);
 
-						CopyVec3(LastPosRaySurfStage, PosRaySurfStage);
-						CopyVec3(LastCosRaySurfStage, CosRaySurfStage);
+                        LastPosRaySurfStage = PosRaySurfStage;
+                        LastCosRaySurfStage = CosRaySurfStage;
 						LastHitBackSide = HitBackSide;
-					}
-				}
+                    }
+                }
 			}
 		}
 	}

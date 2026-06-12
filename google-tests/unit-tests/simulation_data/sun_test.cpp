@@ -218,13 +218,13 @@ TEST(Sun, BasicFunctionality)
     
     // Test position setting and getting
     sun.set_position(1.0, 2.0, 3.0);
-    Vector3d pos = sun.get_position();
+    glm::dvec3 pos = sun.get_position();
     EXPECT_DOUBLE_EQ(pos[0], 1.0);
     EXPECT_DOUBLE_EQ(pos[1], 2.0);
     EXPECT_DOUBLE_EQ(pos[2], 3.0);
     
-    // Test position setting with Vector3d
-    Vector3d new_pos(4.0, 5.0, 6.0);
+    // Test position setting with glm::dvec3
+    glm::dvec3 new_pos(4.0, 5.0, 6.0);
     sun.set_position(new_pos);
     pos = sun.get_position();
     EXPECT_DOUBLE_EQ(pos[0], 4.0);

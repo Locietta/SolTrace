@@ -15,6 +15,9 @@
 
 #include <string>
 
+#include <nlohmann/json.hpp>
+#include <glm/vec3.hpp>
+
 namespace SolTrace::Data {
 
     const std::string kSchemaVersion = "2025.11.12";
@@ -30,6 +33,17 @@ namespace SolTrace::Data {
             return jval;
     }
 
+    inline
+    std::array<double, 3> to_array(glm::dvec3 v)
+    {
+        return {v.x, v.y, v.z};
+    }
+
+    inline
+    glm::dvec3 from_array(std::array<double, 3> array)
+    {
+        return {array[0], array[1], array[2]};
+    }
 
 
 } // namespace SolTrace::Data

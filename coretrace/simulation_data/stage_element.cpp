@@ -14,7 +14,9 @@ StageElement::StageElement(int_fast64_t stage) : CompositeElement()
     return;
 }
 
-StageElement::StageElement(const nlohmann::ordered_json& jnode) : CompositeElement(jnode)
+StageElement::StageElement(const nlohmann::ordered_json& jnode,
+    const OpticalPropertySetResolver& resolve_optics) 
+    : CompositeElement(jnode, resolve_optics)
 {
     // Check that it is a stage
     if (jnode.contains("is_stage") == false || jnode.at("is_stage").get<bool>() == false)

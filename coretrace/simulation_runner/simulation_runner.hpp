@@ -64,6 +64,9 @@ namespace SolTrace::Runner
         virtual RunnerStatus report_simulation(SolTrace::Result::SimulationResult *result,
                                                int level_spec) = 0;
 
+        virtual uint_fast64_t get_number_rays_launched() const = 0;
+        virtual uint_fast64_t get_number_rays_traced() const = 0;
+
     private:
     };
 

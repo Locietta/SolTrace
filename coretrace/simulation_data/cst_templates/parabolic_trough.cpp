@@ -35,9 +35,9 @@ ParabolicTrough::ParabolicTrough()
       tracking_limit_lower(-180.0),
       tracking_limit_upper(180.0)
 {
-    this->tracking_origin.set_values(1.0, 0.0, 0.0);
-    this->rotation_axis.set_values(0.0, 1.0, 0.0);
-    this->neutral_normal.set_values(0.0, 0.0, 1.0);
+    this->tracking_origin = {1.0, 0.0, 0.0};
+    this->rotation_axis = {0.0, 1.0, 0.0};
+    this->neutral_normal = {0.0, 0.0, 1.0};
     return;
 }
 
@@ -67,8 +67,8 @@ void ParabolicTrough::create_geometry()
     aperture_ptr ap = nullptr;
     single_element_ptr panel = nullptr;
     surface_ptr surf = nullptr;
-    Vector3d origin;
-    Vector3d aim;
+    glm::dvec3 origin;
+    glm::dvec3 aim;
     double xstop;
     double gap;
     double ystart, ycoord;
@@ -106,8 +106,8 @@ void ParabolicTrough::create_geometry()
             //           << "\narc_len = " << arc_length
             //           << std::endl;
 
-            origin.set_values(0.0, ycoord, 0.0);
-            aim.set_values(0.0, ycoord, 1000.0);
+            origin = {0.0, ycoord, 0.0};
+            aim = {0.0, ycoord, 1000.0};
 
             panel = make_element<SingleElement>();
             panel->set_name("ParabolicMirror");
@@ -119,7 +119,7 @@ void ParabolicTrough::create_geometry()
             panel->set_aperture(ap);
             surf = make_surface<Parabola>(this->focal_length, 0.0);
             panel->set_surface(surf);
-            panel->set_front_optical_properties(this->optics_mirror);
+            panel->set_optical_property_set(this->optics_mirror);
             panel->enable();
 
             this->mirrors.push_back(panel);
@@ -147,8 +147,7 @@ void ParabolicTrough::create_geometry()
     abs->set_aperture(make_aperture<Rectangle>(this->absorber_diameter,
                                                this->aperture_size_y));
     abs->set_surface(make_surface<Cylinder>(0.5 * this->absorber_diameter));
-    abs->set_front_optical_properties(this->optics_absorber);
-    abs->set_back_optical_properties(this->optics_absorber);
+    abs->set_optical_property_set(optics_absorber);
     abs->enable();
     this->absorbers.push_back(abs);
     auto id = this->add_element(abs);
@@ -169,8 +168,7 @@ void ParabolicTrough::create_geometry()
     envout->set_aperture(make_aperture<Rectangle>(this->envelope_diameter,
                                                   this->aperture_size_y));
     envout->set_surface(make_surface<Cylinder>(0.5 * this->envelope_diameter));
-    envout->set_front_optical_properties(this->optics_envelope_outer);
-    envout->set_back_optical_properties(this->optics_envelope_outer);
+    envout->set_optical_property_set(optics_envelope_outer);
     envout->enable();
     this->envelopes.push_back(envout);
     id = this->add_element(envout);
@@ -192,8 +190,7 @@ void ParabolicTrough::create_geometry()
     double ap_y = this->aperture_size_y;
     envin->set_aperture(make_aperture<Rectangle>(ap_x, ap_y));
     envin->set_surface(make_surface<Cylinder>(0.5 * ap_x));
-    envin->set_front_optical_properties(this->optics_envelope_inner);
-    envin->set_back_optical_properties(this->optics_envelope_inner);
+    envin->set_optical_property_set(optics_envelope_inner);
     envin->enable();
     this->envelopes.push_back(envin);
     id = this->add_element(envin);
@@ -204,20 +201,20 @@ void ParabolicTrough::create_geometry()
 
     this->enable();
 
-    this->rotation_axis.make_unit();
-    this->tracking_origin.make_unit();
+    this->rotation_axis = glm::normalize(this->rotation_axis);
+    this->tracking_origin = glm::normalize(this->tracking_origin);
 
     rotate_vector_degrees(this->rotation_axis,
                           this->tracking_origin,
                           -this->tracking_limit_lower,
                           this->vector_lower_limit);
-    this->vector_lower_limit.make_unit();
+    this->vector_lower_limit = glm::normalize(this->vector_lower_limit);
 
     rotate_vector_degrees(this->rotation_axis,
                           this->tracking_origin,
                           -this->tracking_limit_upper,
                           this->vector_upper_limit);
-    this->vector_upper_limit.make_unit();
+    this->vector_upper_limit = glm::normalize(this->vector_upper_limit);
 
     this->initialized = true;
 
@@ -254,20 +251,20 @@ void ParabolicTrough::update_geometry(double azimuth,
 
     this->coordinates_initialized = false;
 
-    Vector3d sun_pos;
+    glm::dvec3 sun_pos;
     sun_position_vector_degrees(sun_pos, azimuth, elevation);
-    make_unit_vector(sun_pos);
+    sun_pos = glm::normalize(sun_pos);
 
     // Project into the plane defined by rotation axis as the normal
-    Vector3d sun_proj;
+    glm::dvec3 sun_proj;
     project_onto_plane(this->rotation_axis, sun_pos, sun_proj);
-    make_unit_vector(sun_proj);
+    sun_proj = glm::normalize(sun_proj);
 
-    assert(dot_product(sun_proj, this->rotation_axis) < 1e-12);
+    assert(glm::dot(sun_proj, this->rotation_axis) < 1e-12);
 
-    // double theta = acos(dot_product(sun_proj, this->tracking_origin)) * R2D;
-    double theta = acos(dot_product(sun_proj, this->neutral_normal)) * R2D;
-    if (dot_product(sun_proj, this->tracking_origin) < 0.0)
+    // double theta = acos(glm::dot(sun_proj, this->tracking_origin)) * R2D;
+    double theta = acos(glm::dot(sun_proj, this->neutral_normal)) * R2D;
+    if (glm::dot(sun_proj, this->tracking_origin) < 0.0)
         theta = -theta;
 
     if (theta < this->tracking_limit_lower)
@@ -288,16 +285,16 @@ void ParabolicTrough::update_geometry(double azimuth,
         this->convert_global_to_reference(this->aim, sun_proj);
     }
 
-    Vector3d rotation_axis_ref;
-    this->aim.make_unit();
+    glm::dvec3 rotation_axis_ref;
+    this->aim = glm::normalize(this->aim);
     double beta = asin(this->aim[1]);
     this->convert_global_to_reference(rotation_axis_ref,
                                       this->rotation_axis);
     double gamma = acos(rotation_axis_ref[1] / cos(beta));
 
     this->set_zrot_radians(gamma);
-    this->aim.scalar_mult(1000.0);
-    vector_add(1.0, this->origin, 1.0, this->aim);
+    this->aim *= 1000.0;
+    this->aim = this->origin + this->aim;
 
     this->compute_coordinate_rotations();
 
@@ -350,19 +347,24 @@ void ParabolicTrough::set_angles(double azimuth, double tilt)
 
     // Convert spherical coordinates to cartesian coordinates
     // y-axis
-    this->rotation_axis.set_values(sin(inc) * cos(pol),
-                                   sin(inc) * sin(pol),
-                                   cos(inc));
+    this->rotation_axis = {
+        sin(inc) * cos(pol),
+        sin(inc) * sin(pol),
+        cos(inc)
+    };
 
     // z-axis
-    this->neutral_normal.set_values(sin(-el) * cos(pol),
-                                    sin(-el) * sin(pol),
-                                    cos(-el));
+    this->neutral_normal = {
+        sin(-el) * cos(pol),
+        sin(-el) * sin(pol),
+        cos(-el)
+    };
 
     // x-axis
-    cross_product(this->rotation_axis,
-                  this->neutral_normal,
-                  this->tracking_origin);
+    this->tracking_origin = glm::cross(
+        this->rotation_axis,
+        this->neutral_normal
+    );
 
     return;
 }
@@ -453,10 +455,10 @@ void ParabolicTrough::set_number_panels(int_fast64_t num_x,
     return;
 }
 
-void ParabolicTrough::set_optics(const OpticalProperties &mirror,
-                                 const OpticalProperties &absorber,
-                                 const OpticalProperties &envelope_inner,
-                                 const OpticalProperties &envelope_outer)
+void ParabolicTrough::set_optics(const OpticalPropertySetReference mirror,
+                                 const OpticalPropertySetReference absorber,
+                                 const OpticalPropertySetReference envelope_inner,
+                                 const OpticalPropertySetReference envelope_outer)
 {
     this->optics_mirror = mirror;
     this->optics_absorber = absorber;

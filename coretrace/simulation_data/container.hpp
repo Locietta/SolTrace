@@ -145,10 +145,37 @@ public:
         return;
     }
 
+    void reset(K start = 0)
+    {
+        this->container.clear();
+        this->next_id = start;
+    }
+
     iterator get_iterator() { return container.begin(); }
     const_iterator get_const_iterator() const { return container.cbegin(); }
     bool is_at_end(iterator iter) const { return iter == container.end(); }
     bool is_at_end(const_iterator citer) const { return citer == container.cend(); }
+
+    bool insert_item(K id, value_pointer item)
+    {
+        typename std::map<K, value_pointer>::value_type to_insert(id, item);
+        auto result = this->container.insert(to_insert);
+        return result.second;
+    }
+
+    void recompute_next_id(K minimum = 0)
+    {
+        K next = minimum;
+        for (const auto& [id, item] : this->container)
+        {
+            if (id >= next)
+            {
+                next = id + 1;
+            }
+        }
+
+        this->next_id = next;
+    }
 
 private:
     std::map<K, value_pointer> container;

@@ -1,145 +1,20 @@
 #include "simulation_result.hpp"
 
+#define GLM_ENABLE_EXPERIMENTAL 1
+#include <glm/gtx/io.hpp>
+
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 
 #include "element.hpp"
-#include "vector3d.hpp"
+#include "records.hpp"
 
 namespace SolTrace::Result
 {
-
     using element_id = SolTrace::Data::element_id;
-    using Vector3d = SolTrace::Data::Vector3d;
-
-    const std::string &ray_event_string(const RayEvent rev)
-    {
-        auto item = REV_TO_STR.find(rev);
-        if (item != REV_TO_STR.cend())
-        {
-            return item->second;
-        }
-        else
-        {
-            return REV_TO_STR.find(RayEvent::UNKNOWN)->second;
-        }
-    }
-
-    InteractionRecord::InteractionRecord(
-        element_id el,
-        RayEvent rev,
-        const Vector3d &location,
-        const Vector3d &direction)
-        // : index(-1),
-        : element(el),
-          event(rev),
-          location(location),
-          direction(direction)
-    {
-    }
-
-    InteractionRecord::InteractionRecord(
-        element_id el,
-        RayEvent rev,
-        double px,
-        double py,
-        double pz,
-        double dx,
-        double dy,
-        double dz)
-        : element(el),
-          event(rev),
-          location(px, py, pz),
-          direction(dx, dy, dz)
-    {
-    }
-
-    InteractionRecord::~InteractionRecord()
-    {
-    }
-
-    std::ostream &operator<<(std::ostream &os, const InteractionRecord &rec)
-    {
-        os << "Element: " << rec.element
-           << " Location: " << rec.location
-           << " Direction: " << rec.direction
-           << " Event: " << ray_event_string(rec.event);
-        return os;
-    }
-
-    RayRecord::RayRecord(ray_id id) : id(id)
-    {
-    }
-
-    RayRecord::~RayRecord()
-    {
-        this->interactions.clear();
-        return;
-    }
-
-    void RayRecord::add_interaction_record(interaction_ptr ip)
-    {
-        // ip->index = this->interactions.size();
-        this->interactions.push_back(ip);
-        return;
-    }
-
-    void RayRecord::get_position(const interaction_ptr ip, Vector3d &pos)
-    {
-        pos = ip->location;
-        return;
-    }
-
-    void RayRecord::get_position(int_fast64_t idx, Vector3d &pos)
-    {
-        const interaction_ptr ip0 = this->interactions[idx];
-        return this->get_position(ip0, pos);
-    }
-
-    void RayRecord::get_direction(const interaction_ptr ip,
-                                  Vector3d &cos)
-    {
-        cos = ip->direction;
-        make_unit_vector(cos);
-        return;
-    }
-
-    void RayRecord::get_direction(int_fast64_t idx,
-                                  Vector3d &cos)
-    {
-        const interaction_ptr ip0 = this->interactions[idx];
-        this->get_direction(ip0, cos);
-        return;
-    }
-
-    const interaction_ptr &RayRecord::operator[](int_fast64_t idx) const
-    {
-        if (idx < 0 || idx >= this->interactions.size())
-        {
-            std::stringstream ss;
-            ss << "RayRecord: Index " << idx
-               << " is out of bounds [0, " << this->interactions.size()
-               << "].";
-            throw std::invalid_argument(ss.str());
-        }
-        return this->interactions[idx];
-    }
-
-    std::ostream &operator<<(std::ostream &os, const RayRecord &rec)
-    {
-        os << "Ray: " << rec.id
-           << "\nInteractions:\n";
-        for (uint_fast64_t k = 0; k < rec.interactions.size(); ++k)
-        {
-            os << k << " " << *rec.interactions[k] << "\n";
-        }
-        // os << "Last Cosines: " << rec.cos_last << "\n";
-        return os;
-    }
 
     SimulationResult::SimulationResult()
     {
@@ -149,23 +24,42 @@ namespace SolTrace::Result
     SimulationResult::~SimulationResult()
     {
         this->ray_history.clear();
+        this->element_view.clear();
         return;
     }
 
     void SimulationResult::add_ray_record(ray_record_ptr rp)
     {
         this->ray_history.push_back(rp);
+        this->add_element_view(rp);
         return;
     }
 
+    const element_record_ptr SimulationResult::get_element_record(element_id elid) const
+    {
+        auto iter = this->element_view.find(elid);
+        element_record_ptr retval = nullptr;
+        if (iter == this->element_view.end())
+        {
+            // Nothing in the record hit this element. Create an empty
+            // record to return.
+            retval = make_element_record(elid);
+        }
+        else
+        {
+            retval = iter->second;
+        }
+        return retval;
+    }
+
     void SimulationResult::write_csv_file(std::string csv_name,
-                                          int precision)
+                                          int precision) const
     {
         return this->write_csv_file(csv_name.c_str(), precision);
     }
 
     void SimulationResult::write_csv_file(const char *csv_name,
-                                          int precision)
+                                          int precision) const
     {
         std::ofstream csv(csv_name);
         csv.precision(precision);
@@ -203,12 +97,6 @@ namespace SolTrace::Result
         return this->ray_history[idx];
     }
 
-    // ray_record_ptr &SimulationResult::operator[](int_fast64_t idx)
-    // {
-    //     // TODO: Probably should do bounds checking...
-    //     return this->ray_history[idx];
-    // }
-
     std::ostream &operator<<(std::ostream &os, const SimulationResult &simres)
     {
         os << "Simulation Results -- " << simres.ray_history.size() << " Rays\n";
@@ -219,6 +107,33 @@ namespace SolTrace::Result
             os << *simres.ray_history[k];
         }
         return os;
+    }
+
+    void SimulationResult::add_element_view(const ray_record_ptr rp)
+    {
+        element_record_ptr erec;
+        interaction_ptr ip;
+
+        for (auto iter = rp->interactions.cbegin();
+             iter != rp->interactions.cend();
+             ++iter)
+        {
+            ip = *iter;
+            auto eiter = this->element_view.find(ip->element);
+
+            if (eiter == this->element_view.cend())
+            {
+                erec = make_element_record(ip->element);
+                this->element_view.insert(std::make_pair(ip->element, erec));
+            }
+            else
+            {
+                erec = eiter->second;
+            }
+
+            erec->interactions.push_back(ip);
+        }
+        return;
     }
 
 } // namespace SolTrace::Result

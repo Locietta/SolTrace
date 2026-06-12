@@ -4,7 +4,6 @@
 
 #include <flat_calculator.hpp>
 #include <surface.hpp>
-#include <vector3d.hpp>
 
 #include "common.hpp"
 
@@ -43,22 +42,20 @@ TEST(FlatCalculator, ConstructorValid)
 TEST(FlatCalculator, Case1)
 {
     // Case: mz = 0, parallel to plane -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray position
-    Vector3d x0(2.0, 1.0, -3.0);
+    glm::dvec3 x0(2.0, 1.0, -3.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, 0.0);
+    glm::dvec3 m(1.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     FlatCalculator fcalc(create_flat_surface(), create_rectangle_aperture());
-    int sts = fcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = fcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -69,22 +66,20 @@ TEST(FlatCalculator, Case1)
 TEST(FlatCalculator, Case2)
 {
     // Case: t < 0.0 -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray position
-    Vector3d x0(2.0, 1.0, -3.0);
+    glm::dvec3 x0(2.0, 1.0, -3.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, -2.0);
+    glm::dvec3 m(1.0, 1.0, -2.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     FlatCalculator fcalc(create_flat_surface(), create_rectangle_aperture());
-    int sts = fcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = fcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -95,26 +90,24 @@ TEST(FlatCalculator, Case2)
 TEST(FlatCalculator, Case3)
 {
     // Case: t > 0.0 -- returns solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray position
-    Vector3d x0(2.0, 1.0, -3.0);
+    glm::dvec3 x0(2.0, 1.0, -3.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, 2.0);
+    glm::dvec3 m(1.0, 1.0, 2.0);
     // Solution
     const double T = 1.5;
     const double TOL = 1e-12;
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     FlatCalculator fcalc(create_flat_surface(),
                          create_rectangle_aperture(10.0, 10.0));
-    int sts = fcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = fcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
     EXPECT_NEAR(xt[0], x0[0] + m[0] * T, TOL);
@@ -130,26 +123,24 @@ TEST(FlatCalculator, Case3)
 TEST(FlatCalculator, Case4)
 {
     // Case: t > 0.0, outside aperture -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray position
-    Vector3d x0(2.0, 1.0, -3.0);
+    glm::dvec3 x0(2.0, 1.0, -3.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, 2.0);
+    glm::dvec3 m(1.0, 1.0, 2.0);
     // Solution
     const double T = 1.5;
     // const double TOL = 1e-12;
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     FlatCalculator fcalc(create_flat_surface(),
                          create_rectangle_aperture(1.0, 1.0));
-    int sts = fcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = fcalc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);

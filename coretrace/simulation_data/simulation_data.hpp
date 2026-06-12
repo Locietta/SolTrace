@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <string>
 
 #include "container.hpp"
 #include "element.hpp"
@@ -27,6 +28,8 @@ namespace SolTrace::Data {
 
 class SimulationData
 {
+    friend void load_json_file(SimulationData& sd, std::string filename);
+
 public:
     SimulationData();
     virtual ~SimulationData();
@@ -159,6 +162,28 @@ public:
         // return citer == this->my_elements.end();
     }
 
+    OpticalPropertySetReference add_optical_property_set(const OpticalPropertySet& opt_set);
+    OpticalPropertySetReference find_or_add_optical_property_set(const OpticalPropertySet& opt_set);
+
+    const OpticalPropertySet* get_optical_property_set(const Element& el) const;
+    OpticalPropertySet* get_mutable_optical_property_set(const Element& el);
+
+    /// @brief Get an iterator that can be used to access all 
+    ///  optical property sets owned by this SimulationData object.
+    /// @return iterator
+    OpticalPropertySetContainer::iterator get_optics_iterator()
+    {
+        return this->my_optical_property_sets.get_iterator();
+    }
+
+    /// @brief Tests whether the given iterator is at the end
+    /// @param iter iterator to test
+    /// @return true if at end, false otherwise
+    bool is_optics_at_end(OpticalPropertySetContainer::iterator it)
+    {
+        return this->my_optical_property_sets.is_at_end(it);
+    }
+
     /// @brief Set the number of rays to trace
     /// @param nrays number of rays to trace
     void set_number_of_rays(uint_fast64_t nrays)
@@ -289,7 +314,8 @@ public:
     /// Serializes the current simulation data and writes it to the specified JSON file.
     void export_json_file(const std::string file_name);
 
-    /// @brief Clear elements and ray sources. Designed for use by the file stinput and json file readers when there is an error.
+    /// @brief Clear elements, ray sources, and optical property sets. 
+    /// Designed for use by the file stinput and json file readers when there is an error.
     /// @param reset_parameters Optional bool to reset simulation parameters
     void clear(bool reset_parameters = false);
 
@@ -301,6 +327,7 @@ private:
     ElementContainer my_elements;
     RaySourceContainer my_sources;
     SimulationParameters my_parameters;
+    OpticalPropertySetContainer my_optical_property_sets;
 
     // void add_single_element(element_id key, element_ptr el);
     // void add_composite_element(element_id key, element_ptr el);
@@ -308,6 +335,9 @@ private:
     // uint_fast64_t remove_composite_element(element_ptr el);
     uint_fast64_t add_subelements(element_ptr el);
     uint_fast64_t remove_subelements(element_ptr el);
+
+    const OpticalPropertySet* get_optical_property_set(optics_id id) const;
+    OpticalPropertySet* get_optical_property_set(optics_id id);
 };
 
 } // namespace SolTrace::Data

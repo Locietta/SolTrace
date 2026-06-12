@@ -15,7 +15,10 @@
 
 // #include <memory>
 #include <string>
+
 #include <nlohmann/json.hpp>
+#include <glm/vec3.hpp>
+#include <glm/mat3x3.hpp>
 
 #include "aperture.hpp"
 #include "constants.hpp"
@@ -23,7 +26,7 @@
 #include "optical_properties.hpp"
 #include "ray_source.hpp"
 #include "surface.hpp"
-#include "vector3d.hpp"
+
 
 namespace SolTrace::Data {
 
@@ -114,25 +117,25 @@ public:
    * @brief Get origin position in reference coordinates
    * @return Origin position vector in reference frame
    */
-  virtual Vector3d get_origin_ref() const = 0;
+  virtual glm::dvec3 get_origin_ref() const = 0;
 
   /**
    * @brief Get origin position in stage coordinates
    * @return Origin position vector in stage frame
    */
-  virtual Vector3d get_origin_stage() const = 0;
+  virtual glm::dvec3 get_origin_stage() const = 0;
 
   /**
    * @brief Get origin position in global coordinates
    * @return Origin position vector in global frame
    */
-  virtual Vector3d get_origin_global() const = 0;
+  virtual glm::dvec3 get_origin_global() const = 0;
 
   /**
    * @brief Set origin position (always relative to reference coordinates)
    * @param origin New origin position vector
    */
-  virtual void set_origin(const Vector3d &) = 0;
+  virtual void set_origin(const glm::dvec3 &) = 0;
 
   /**
    * @brief Set origin position (always relative to reference coordinates)
@@ -142,36 +145,36 @@ public:
    */
   virtual void set_origin(double, double, double) = 0;
 
-  // virtual const Vector3d &get_global_origin() const = 0;
-  // virtual void set_global_origin(const Vector3d &) = 0;
+  // virtual const glm::dvec3 &get_global_origin() const = 0;
+  // virtual void set_global_origin(const glm::dvec3 &) = 0;
 
   /**
    * @brief Get aim vector in reference coordinates
    * @return Aim direction vector in reference frame
    */
-  virtual Vector3d get_aim_vector_ref() const = 0;
-  virtual Vector3d get_aim_vector_stage() const = 0;
-  virtual Vector3d get_aim_vector_global() const = 0;
+  virtual glm::dvec3 get_aim_vector_ref() const = 0;
+  virtual glm::dvec3 get_aim_vector_stage() const = 0;
+  virtual glm::dvec3 get_aim_vector_global() const = 0;
   // Always the aim vector with respect the reference coordinates
-  virtual void set_aim_vector(const Vector3d &) = 0;
+  virtual void set_aim_vector(const glm::dvec3 &) = 0;
   virtual void set_aim_vector(double, double, double) = 0;
   // Always the Euler angles with respect the reference coordinates
-  virtual const Vector3d &get_euler_angles() const = 0;
+  virtual const glm::dvec3 &get_euler_angles() const = 0;
   // Always the ZRot with respect to the reference coordinates
   virtual double get_zrot() const = 0;
   virtual void set_zrot(double) = 0;
   virtual double get_zrot_radians() const = 0;
   virtual void set_zrot_radians(double) = 0;
 
-  virtual Matrix3d get_reference_to_local() const = 0;
-  virtual Matrix3d get_stage_to_local() const = 0;
-  virtual Matrix3d get_global_to_local() const = 0;
-  virtual Matrix3d get_local_to_reference() const = 0;
-  virtual Matrix3d get_local_to_stage() const = 0;
-  virtual Matrix3d get_local_to_global() const = 0;
+  virtual glm::dmat3 get_reference_to_local() const = 0;
+  virtual glm::dmat3 get_stage_to_local() const = 0;
+  virtual glm::dmat3 get_global_to_local() const = 0;
+  virtual glm::dmat3 get_local_to_reference() const = 0;
+  virtual glm::dmat3 get_local_to_stage() const = 0;
+  virtual glm::dmat3 get_local_to_global() const = 0;
 
-  // virtual const Vector3d &get_upper_bounding_box() const = 0;
-  // virtual const Vector3d &get_lower_bounding_box() const = 0;
+  // virtual const glm::dvec3 &get_upper_bounding_box() const = 0;
+  // virtual const glm::dvec3 &get_lower_bounding_box() const = 0;
 
   // Accessors for SingleElements
   virtual const aperture_ptr get_aperture() const = 0;
@@ -184,13 +187,9 @@ public:
   // virtual const OpticalProperties &get_optical_properties() const = 0;
   // virtual void set_optical_properties(const OpticalProperties &) = 0;
 
-  virtual const OpticalProperties *get_front_optical_properties() const = 0;
-  virtual OpticalProperties *get_front_optical_properties() = 0;
-  virtual void set_front_optical_properties(const OpticalProperties &) = 0;
-
-  virtual const OpticalProperties *get_back_optical_properties() const = 0;
-  virtual OpticalProperties *get_back_optical_properties() = 0;
-  virtual void set_back_optical_properties(const OpticalProperties &) = 0;
+  virtual optics_id get_optical_property_set_id() const = 0;
+  virtual std::shared_ptr<const OpticalPropertySet> get_optical_property_set() const = 0;
+  virtual void set_optical_property_set(const OpticalPropertySetReference& optics) = 0;
 
   // Accessors for CompositeElements
   virtual uint_fast64_t get_number_of_elements() const = 0;
@@ -200,8 +199,8 @@ public:
   // virtual bool is_at_end(ElementContainer::const_iterator iter) = 0;
 
   // Coordinate transformation routines
-  virtual int set_reference_frame_geometry(const Vector3d &origin,
-                                           const Vector3d &aim,
+  virtual int set_reference_frame_geometry(const glm::dvec3 &origin,
+                                           const glm::dvec3 &aim,
                                            double zrot) = 0;
 
   /****************************************************************
@@ -212,30 +211,30 @@ public:
    ****************************************************************/
 
   // Convert `ref` to local coordinates and store the result in `local`
-  virtual int convert_reference_to_local(Vector3d &local,
-                                         const Vector3d &ref) = 0;
+  virtual int convert_reference_to_local(glm::dvec3 &local,
+                                         const glm::dvec3 &ref) = 0;
   // Convert `stage` to local coordinates and store the result in `local`
-  virtual int convert_stage_to_local(Vector3d &local,
-                                     const Vector3d &stage) = 0;
+  virtual int convert_stage_to_local(glm::dvec3 &local,
+                                     const glm::dvec3 &stage) = 0;
   // Convert `global` to local coordinates and store the result in `local`
-  virtual int convert_global_to_local(Vector3d &local,
-                                      const Vector3d &global) = 0;
+  virtual int convert_global_to_local(glm::dvec3 &local,
+                                      const glm::dvec3 &global) = 0;
   // Convert `local` to reference coordinates and store the result in `ref`
-  virtual int convert_local_to_reference(Vector3d &ref,
-                                         const Vector3d &local) = 0;
+  virtual int convert_local_to_reference(glm::dvec3 &ref,
+                                         const glm::dvec3 &local) = 0;
   // Convert `local` to stage coordinates and store the result in `stage`
-  virtual int convert_local_to_stage(Vector3d &stage,
-                                     const Vector3d &local) = 0;
+  virtual int convert_local_to_stage(glm::dvec3 &stage,
+                                     const glm::dvec3 &local) = 0;
   // Convert `local` to global coordinates and store the result in `global`
-  virtual int convert_local_to_global(Vector3d &global,
-                                      const Vector3d &local) = 0;
+  virtual int convert_local_to_global(glm::dvec3 &global,
+                                      const glm::dvec3 &local) = 0;
 
   // Convert global coordinates to reference coordinates
-  virtual int convert_global_to_reference(Vector3d &ref,
-                                          const Vector3d &global) = 0;
+  virtual int convert_global_to_reference(glm::dvec3 &ref,
+                                          const glm::dvec3 &global) = 0;
   // Convert reference coordinates to global
-  virtual int convert_reference_to_global(Vector3d &global,
-                                          const Vector3d &ref) = 0;
+  virtual int convert_reference_to_global(glm::dvec3 &global,
+                                          const glm::dvec3 &ref) = 0;
 
   /****************************************************************
    * These are vector coordinate conversion routines. They convert a
@@ -245,30 +244,30 @@ public:
    ****************************************************************/
 
   // Convert `ref` to local coordinates and store the result in `local`
-  virtual int convert_vector_reference_to_local(Vector3d &local,
-                                                const Vector3d &ref) = 0;
+  virtual int convert_vector_reference_to_local(glm::dvec3 &local,
+                                                const glm::dvec3 &ref) = 0;
   // Convert `stage` to local coordinates and store the result in `local`
-  virtual int convert_vector_stage_to_local(Vector3d &local,
-                                            const Vector3d &stage) = 0;
+  virtual int convert_vector_stage_to_local(glm::dvec3 &local,
+                                            const glm::dvec3 &stage) = 0;
   // Convert `global` to local coordinates and store the result in `local`
-  virtual int convert_vector_global_to_local(Vector3d &local,
-                                             const Vector3d &global) = 0;
+  virtual int convert_vector_global_to_local(glm::dvec3 &local,
+                                             const glm::dvec3 &global) = 0;
   // Convert `local` to reference coordinates and store the result in `ref`
-  virtual int convert_vector_local_to_reference(Vector3d &ref,
-                                                const Vector3d &local) = 0;
+  virtual int convert_vector_local_to_reference(glm::dvec3 &ref,
+                                                const glm::dvec3 &local) = 0;
   // Convert `local` to stage coordinates and store the result in `stage`
-  virtual int convert_vector_local_to_stage(Vector3d &stage,
-                                            const Vector3d &local) = 0;
+  virtual int convert_vector_local_to_stage(glm::dvec3 &stage,
+                                            const glm::dvec3 &local) = 0;
   // Convert `local` to global coordinates and store the result in `global`
-  virtual int convert_vector_local_to_global(Vector3d &global,
-                                             const Vector3d &local) = 0;
+  virtual int convert_vector_local_to_global(glm::dvec3 &global,
+                                             const glm::dvec3 &local) = 0;
 
   // Convert global coordinates to reference coordinates
-  virtual int convert_vector_global_to_reference(Vector3d &ref,
-                                                 const Vector3d &global) = 0;
+  virtual int convert_vector_global_to_reference(glm::dvec3 &ref,
+                                                 const glm::dvec3 &global) = 0;
   // Convert reference coordinates to global
-  virtual int convert_vector_reference_to_global(Vector3d &global,
-                                                 const Vector3d &ref) = 0;
+  virtual int convert_vector_reference_to_global(glm::dvec3 &global,
+                                                 const glm::dvec3 &ref) = 0;
 
   // Other routines
   // Computes necessary coordinate transformation data. Expects
@@ -287,10 +286,10 @@ public:
 
   // WARNING: The below Accessors should be used with care. They set
   // values that are set automatically -- these are here just in case...
-  virtual void set_euler_angles(const Vector3d &) = 0;
+  virtual void set_euler_angles(const glm::dvec3 &) = 0;
   virtual void set_euler_angles(double, double, double) = 0;
-  virtual void set_reference_to_local(const Matrix3d &) = 0;
-  virtual void set_local_to_reference(const Matrix3d &) = 0;
+  virtual void set_reference_to_local(const glm::dmat3 &) = 0;
+  virtual void set_local_to_reference(const glm::dmat3 &) = 0;
 
   // Check that all required fields have been set
   virtual void enforce_user_fields_set() const = 0;
@@ -313,7 +312,7 @@ class ElementBase : public Element
 {
 public:
   ElementBase();
-  // ElementBase(const Vector3d &origin, const Vector3d &aim);
+  // ElementBase(const glm::dvec3 &origin, const glm::dvec3 &aim);
   ElementBase(const nlohmann::ordered_json& jnode);
   virtual ~ElementBase();
 
@@ -363,10 +362,10 @@ public:
     this->my_name = name;
   }
 
-  virtual Vector3d get_origin_ref() const override { return this->origin; }
-  virtual Vector3d get_origin_stage() const override;
-  virtual Vector3d get_origin_global() const override;
-  virtual void set_origin(const Vector3d &point) override
+  virtual glm::dvec3 get_origin_ref() const override { return this->origin; }
+  virtual glm::dvec3 get_origin_stage() const override;
+  virtual glm::dvec3 get_origin_global() const override;
+  virtual void set_origin(const glm::dvec3 &point) override
   {
     this->coordinates_initialized = false;
     this->origin = point;
@@ -375,13 +374,13 @@ public:
   virtual void set_origin(double x, double y, double z) override
   {
     this->coordinates_initialized = false;
-    this->origin.set_values(x, y, z);
+    this->origin = {x, y, z};
     return;
   }
-  virtual Vector3d get_aim_vector_ref() const override { return this->aim; }
-  virtual Vector3d get_aim_vector_stage() const override;
-  virtual Vector3d get_aim_vector_global() const override;
-  virtual void set_aim_vector(const Vector3d &direction) override
+  virtual glm::dvec3 get_aim_vector_ref() const override { return this->aim; }
+  virtual glm::dvec3 get_aim_vector_stage() const override;
+  virtual glm::dvec3 get_aim_vector_global() const override;
+  virtual void set_aim_vector(const glm::dvec3 &direction) override
   {
     this->coordinates_initialized = false;
     this->aim = direction;
@@ -390,14 +389,14 @@ public:
   virtual void set_aim_vector(double x, double y, double z) override
   {
     this->coordinates_initialized = false;
-    this->aim.set_values(x, y, z);
+    this->aim = {x, y, z};
     return;
   }
-  virtual const Vector3d &get_euler_angles() const override
+  virtual const glm::dvec3 &get_euler_angles() const override
   {
     return this->euler_angles;
   }
-  // virtual void set_euler_angles(const Vector3d &angles)
+  // virtual void set_euler_angles(const glm::dvec3 &angles)
   // {
   //   this->euler_angles = angles;
   //   return;
@@ -421,85 +420,85 @@ public:
     return;
   }
 
-  virtual Matrix3d get_reference_to_local() const override;
-  virtual Matrix3d get_stage_to_local() const override;
-  virtual Matrix3d get_global_to_local() const override;
-  virtual Matrix3d get_local_to_reference() const override;
-  virtual Matrix3d get_local_to_stage() const override;
-  virtual Matrix3d get_local_to_global() const override;
+  virtual glm::dmat3 get_reference_to_local() const override;
+  virtual glm::dmat3 get_stage_to_local() const override;
+  virtual glm::dmat3 get_global_to_local() const override;
+  virtual glm::dmat3 get_local_to_reference() const override;
+  virtual glm::dmat3 get_local_to_stage() const override;
+  virtual glm::dmat3 get_local_to_global() const override;
 
   virtual int compute_coordinate_rotations() override;
-  virtual int set_reference_frame_geometry(const Vector3d &origin,
-                                           const Vector3d &aim,
+  virtual int set_reference_frame_geometry(const glm::dvec3 &origin,
+                                           const glm::dvec3 &aim,
                                            double zrot) override;
 
   // Convert `ref` to local coordinates and store the result in `local`
-  virtual int convert_reference_to_local(Vector3d &local,
-                                         const Vector3d &ref) override;
+  virtual int convert_reference_to_local(glm::dvec3 &local,
+                                         const glm::dvec3 &ref) override;
   // Convert `stage` to local coordinates and store the result in `local`
-  virtual int convert_stage_to_local(Vector3d &local,
-                                     const Vector3d &stage) override;
+  virtual int convert_stage_to_local(glm::dvec3 &local,
+                                     const glm::dvec3 &stage) override;
   // Convert `global` to local coordinates and store the result in `local`
-  virtual int convert_global_to_local(Vector3d &local,
-                                      const Vector3d &global) override;
+  virtual int convert_global_to_local(glm::dvec3 &local,
+                                      const glm::dvec3 &global) override;
   // Convert `local` to reference coordinates and store the result in `ref`
-  virtual int convert_local_to_reference(Vector3d &ref,
-                                         const Vector3d &local) override;
+  virtual int convert_local_to_reference(glm::dvec3 &ref,
+                                         const glm::dvec3 &local) override;
   // Convert `local` to stage coordinates and store the result in `stage`
-  virtual int convert_local_to_stage(Vector3d &stage,
-                                     const Vector3d &local) override;
+  virtual int convert_local_to_stage(glm::dvec3 &stage,
+                                     const glm::dvec3 &local) override;
   // Convert `local` to global coordinates and store the result in `global`
-  virtual int convert_local_to_global(Vector3d &global,
-                                      const Vector3d &local) override;
+  virtual int convert_local_to_global(glm::dvec3 &global,
+                                      const glm::dvec3 &local) override;
 
   // Convert global coordinates to reference coordinates
-  virtual int convert_global_to_reference(Vector3d &ref,
-                                          const Vector3d &global) override;
+  virtual int convert_global_to_reference(glm::dvec3 &ref,
+                                          const glm::dvec3 &global) override;
   // Convert reference coordinates to global
-  virtual int convert_reference_to_global(Vector3d &global,
-                                          const Vector3d &ref) override;
+  virtual int convert_reference_to_global(glm::dvec3 &global,
+                                          const glm::dvec3 &ref) override;
 
   // Convert `ref` to local coordinates and store the result in `local`
-  virtual int convert_vector_reference_to_local(Vector3d &local,
-                                                const Vector3d &ref) override;
+  virtual int convert_vector_reference_to_local(glm::dvec3 &local,
+                                                const glm::dvec3 &ref) override;
   // Convert `stage` to local coordinates and store the result in `local`
-  virtual int convert_vector_stage_to_local(Vector3d &local,
-                                            const Vector3d &stage) override;
+  virtual int convert_vector_stage_to_local(glm::dvec3 &local,
+                                            const glm::dvec3 &stage) override;
   // Convert `global` to local coordinates and store the result in `local`
-  virtual int convert_vector_global_to_local(Vector3d &local,
-                                             const Vector3d &global) override;
+  virtual int convert_vector_global_to_local(glm::dvec3 &local,
+                                             const glm::dvec3 &global) override;
   // Convert `local` to reference coordinates and store the result in `ref`
-  virtual int convert_vector_local_to_reference(Vector3d &ref,
-                                                const Vector3d &local) override;
+  virtual int convert_vector_local_to_reference(glm::dvec3 &ref,
+                                                const glm::dvec3 &local) override;
   // Convert `local` to stage coordinates and store the result in `stage`
-  virtual int convert_vector_local_to_stage(Vector3d &stage,
-                                            const Vector3d &local) override;
+  virtual int convert_vector_local_to_stage(glm::dvec3 &stage,
+                                            const glm::dvec3 &local) override;
   // Convert `local` to global coordinates and store the result in `global`
-  virtual int convert_vector_local_to_global(Vector3d &global,
-                                             const Vector3d &local) override;
+  virtual int convert_vector_local_to_global(glm::dvec3 &global,
+                                             const glm::dvec3 &local) override;
 
   // Convert global coordinates to reference coordinates
-  virtual int convert_vector_global_to_reference(Vector3d &ref,
-                                                 const Vector3d &global) override;
+  virtual int convert_vector_global_to_reference(glm::dvec3 &ref,
+                                                 const glm::dvec3 &global) override;
   // Convert reference coordinates to global
-  virtual int convert_vector_reference_to_global(Vector3d &global,
-                                                 const Vector3d &ref) override;
+  virtual int convert_vector_reference_to_global(glm::dvec3 &global,
+                                                 const glm::dvec3 &ref) override;
 
   // WARNING: The below Accessors should be used with care. They set
   // values that are set automatically -- these are here just in case...
-  virtual void set_euler_angles(const Vector3d &ea) override
+  virtual void set_euler_angles(const glm::dvec3 &ea) override
   {
     this->euler_angles = ea;
   }
   virtual void set_euler_angles(double alpha, double beta, double gamma) override
   {
-    this->euler_angles.set_values(alpha, beta, gamma);
+    this->euler_angles = {alpha, beta, gamma};
   }
-  virtual void set_reference_to_local(const Matrix3d &rtol) override
+  virtual void set_reference_to_local(const glm::dmat3 &rtol) override
   {
     this->reference_to_local = rtol;
   }
-  virtual void set_local_to_reference(const Matrix3d &ltor) override
+  virtual void set_local_to_reference(const glm::dmat3 &ltor) override
   {
     this->local_to_reference = ltor;
   }
@@ -525,16 +524,16 @@ protected:
   std::string my_name;
 
   // Location of the origin in the reference coordinate system
-  Vector3d origin;
+  glm::dvec3 origin;
   // Aim vector of element--aligns with the local (positive) z-axis
-  Vector3d aim;
+  glm::dvec3 aim;
   // Rotation about the aim vector to set local x and y axes in degrees (ugh!)
   double zrot;
 
-  Vector3d euler_angles;
+  glm::dvec3 euler_angles;
 
-  Matrix3d reference_to_local;
-  Matrix3d local_to_reference;
+  glm::dmat3 reference_to_local;
+  glm::dmat3 local_to_reference;
 
   // element_ptr reference_element;
   Element *reference_element; // todo: this is a raw pointer, probably shouldn't be

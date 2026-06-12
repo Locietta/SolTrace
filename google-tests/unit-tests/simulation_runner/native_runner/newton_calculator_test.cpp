@@ -3,7 +3,6 @@
 #include <cmath>
 
 #include <newton_calculator.hpp>
-#include <vector3d.hpp>
 
 #include <common.hpp>
 
@@ -23,14 +22,14 @@ public:
     {
     }
     virtual ~ParabolaNewton() {}
-    virtual void set_zstart(double PosXYZ[3])
+    virtual void set_zstart(glm::dvec3 &PosXYZ) override
     {
         PosXYZ[2] = 0.0;
         return;
     }
-    virtual void surface_and_jacobian(const double PosXYZ[3],
+    virtual void surface_and_jacobian(glm::dvec3 PosXYZ,
                                       double *F,
-                                      double DFXYZ[3])
+                                      glm::dvec3 &DFXYZ) override
     {
         double x0 = PosXYZ[0];
         double y0 = PosXYZ[1];
@@ -45,7 +44,7 @@ public:
     double cy;
 
     // Unused -- here so that this is not a pure virtual class
-    virtual double compute_z_aperture(aperture_ptr ap)
+    virtual double compute_z_aperture(aperture_ptr ap) override
     {
         return 0.0;
     }
@@ -55,9 +54,9 @@ TEST(NewtonCalculator, Case1)
 {
     // Case: newton's method converges
     // Ray location
-    Vector3d x0(-2.0, 1.0, 0.0);
+    glm::dvec3 x0(-2.0, 1.0, 0.0);
     // Ray direction
-    Vector3d m(2.0, 0.5, 3.0);
+    glm::dvec3 m(2.0, 0.5, 3.0);
     // Intersection point
     const double T = 2.0 / 3.0;
     const double TOL = 1e-12;
@@ -69,15 +68,13 @@ TEST(NewtonCalculator, Case1)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto rect = create_rectangle_aperture(20.0, 20.0);
     ParabolaNewton pnewt(cx, cy, rect, TOL, MAX_ITERS);
-    int sts = pnewt.intersect(x0.data, m.data,
-                              xt.data, mt.data, 
-                              gradf.data, &t);
+    int sts = pnewt.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
     EXPECT_NEAR(xt[0], m[0] * T + x0[0], TOL);
@@ -93,12 +90,11 @@ TEST(NewtonCalculator, Case1)
 TEST(NewtonCalculator, Case2)
 {
     // Case: newton's method diverges
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray location
-    Vector3d x0(-2.0, 1.0, 0.0);
+    glm::dvec3 x0(-2.0, 1.0, 0.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, 1.0);
+    glm::dvec3 m(1.0, 1.0, 1.0);
 
     // Parabola constants and newton constants
     const double TOL = 1e-12;
@@ -108,14 +104,13 @@ TEST(NewtonCalculator, Case2)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto rect = create_rectangle_aperture(20.0, 20.0);
     ParabolaNewton pnewt(cx, cy, rect, TOL, MAX_ITERS);
-    int sts = pnewt.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pnewt.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));

@@ -10,7 +10,7 @@
 #include "matvec.hpp"
 #include "simulation_data_export.hpp"
 #include "surface.hpp"
-// #include "vector3d.hpp"
+// #include "glm::dvec3.hpp"
 
 namespace SolTrace::NativeRunner
 {
@@ -66,31 +66,31 @@ namespace SolTrace::NativeRunner
     {
     }
 
-    int ParabolaCalculator::intersect(const double PosLoc[3],
-                                      const double CosLoc[3],
-                                      double PosXYZ[3],
-                                      double CosKLM[3],
-                                      double DFXYZ[3],
+    int ParabolaCalculator::intersect(const glm::dvec3 PosLoc,
+                                      const glm::dvec3 CosLoc,
+                                      glm::dvec3& PosXYZ,
+                                      glm::dvec3& CosKLM,
+                                      glm::dvec3& DFXYZ,
                                       double *PathLength)
     {
         int sts = 0;
 
         // std::cout << "Computing parabola intersection" << std::endl;
 
-        double x0 = PosLoc[0], y0 = PosLoc[1], z0 = PosLoc[2];
-        double mx = CosLoc[0], my = CosLoc[1], mz = CosLoc[2];
+        double x0 = PosLoc.x, y0 = PosLoc.y, z0 = PosLoc.z;
+        double mx = CosLoc.x, my = CosLoc.y, mz = CosLoc.z;
         double cx = this->cx, cy = this->cy;
         double t1, t2;
         double a, b, c;
-        Vector3d p1, p2;
+        glm::dvec3 p1, p2;
 
         c = 0.5 * (cx * x0 * x0 + cy * y0 * y0) - z0;
         b = (x0 * cx * mx + y0 * cy * my - mz);
         a = 0.5 * (cx * mx * mx + cy * my * my);
 
-        ZeroVec3(PosXYZ);
-        ZeroVec3(CosKLM);
-        ZeroVec3(DFXYZ);
+        PosXYZ = {};
+        CosKLM = {};
+        DFXYZ = {};
 
         // std::cout << "a: " << a
         //           << " b: " << b
@@ -101,17 +101,14 @@ namespace SolTrace::NativeRunner
         {
             // This should only happen if mx == my == 0.0
             t1 = -c / b;
-            AddVec3(1.0, PosLoc, t1, CosLoc, p1.data);
+            p1 = PosLoc + t1 * CosLoc;
 
-            if (t1 > 0.0 && this->aper->is_in(p1[0], p1[1]))
-            {
+            if (t1 > 0.0 && this->aper->is_in(p1.x, p1.y)) {
                 *PathLength = t1;
                 // SetVec3(PosXYZ, x0 + t1 * mx, y0 + t1 * my, z0 + t1 * mz);
                 // AddVec3(1.0, PosLoc, t1, CosLoc, PosXYZ);
-                CopyVec3(PosXYZ, p1.data);
-            }
-            else
-            {
+                PosXYZ = p1;
+            } else {
                 // Intersection is behind the ray -- same as
                 // no solution.
                 sts = 1;
@@ -140,29 +137,24 @@ namespace SolTrace::NativeRunner
                 // Positive root
                 t2 = -0.5 * (b - scratch) / a;
 
-                AddVec3(1.0, PosLoc, t1, CosLoc, p1.data);
-                AddVec3(1.0, PosLoc, t2, CosLoc, p2.data);
+                p1 = PosLoc + t1 * CosLoc;
+                p2 = PosLoc + t2 * CosLoc;
 
                 // std::cout << "P1: " << p1
                 //           << "\nP2: " << p2
                 //           << std::endl;
 
-                if (t1 > 0.0 && this->aper->is_in(p1[0], p1[1]))
-                {
+                if (t1 > 0.0 && this->aper->is_in(p1.x, p1.y)) {
                     *PathLength = t1;
                     // SetVec3(PosXYZ, x0 + t1 * mx, y0 + t1 * my, z0 + t1 * mz);
                     // AddVec3(1.0, PosLoc, t1, CosLoc, PosXYZ);
-                    CopyVec3(PosXYZ, p1.data);
-                }
-                else if (t2 > 0.0 && this->aper->is_in(p2[0], p2[1]))
-                {
+                    PosXYZ = p1;
+                } else if (t2 > 0.0 && this->aper->is_in(p2.x, p2.y)) {
                     *PathLength = t2;
                     // SetVec3(PosXYZ, x0 + t2 * mx, y0 + t2 * my, z0 + t2 * mz);
                     // AddVec3(1.0, PosLoc, t2, CosLoc, PosXYZ);
-                    CopyVec3(PosXYZ, p2.data);
-                }
-                else
-                {
+                    PosXYZ = p2;
+                } else {
                     sts = 1;
                     *PathLength = 0.0;
                 }
@@ -172,11 +164,11 @@ namespace SolTrace::NativeRunner
         if (sts == 0)
         {
             this->surface_normal(PosXYZ, DFXYZ);
-            CopyVec3(CosKLM, CosLoc);
+            CosKLM = CosLoc;
         }
 
-        // Vector3d grad(DFXYZ);
-        // Vector3d pos(PosXYZ);
+        // glm::dvec3 grad(DFXYZ);
+        // glm::dvec3 pos(PosXYZ);
         // std::cout << "Surface normal: " << grad
         //           << "\nPosition: " << pos
         //           << std::endl;
@@ -186,17 +178,15 @@ namespace SolTrace::NativeRunner
         return sts;
     }
 
-    void ParabolaCalculator::surface_normal(const double PosXYZ[3],
-                                            double DFXYZ[3])
+    void ParabolaCalculator::surface_normal(const glm::dvec3 PosXYZ,
+                                            glm::dvec3& DFXYZ)
     {
         // TODO: Need to default to returning the surface normal of
         // whatever is the "front". Is that the inside of the parabola
         // (which is used currently) or the outside?
         double cx = this->cx;
         double cy = this->cy;
-        DFXYZ[0] = -cx * PosXYZ[0];
-        DFXYZ[1] = -cy * PosXYZ[1];
-        DFXYZ[2] = 1.0;
+        DFXYZ = {-cx * PosXYZ.x, -cy * PosXYZ.y, 1.0};
         return;
     }
 

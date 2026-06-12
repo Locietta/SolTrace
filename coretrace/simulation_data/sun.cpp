@@ -5,7 +5,38 @@
 #include <limits>
 #include <stdexcept>
 
+#include "json_helpers.hpp"
+#include "simdata_io.hpp"
+
 namespace SolTrace::Data {
+
+Sun::Sun(const nlohmann::ordered_json& jnode)
+{
+    std::string my_shape_string = jnode.at("my_shape");
+    this->my_shape = get_enum_from_string(my_shape_string, SunShapeMap, SunShape::UNKNOWN);
+    if (my_shape == SunShape::UNKNOWN)
+    {
+        throw std::runtime_error("Error reading sun shape");
+    }
+
+    this->sigma = json_get_double(jnode, "sigma");
+    this->half_width = json_get_double(jnode, "half_width");
+    this->circumsolar_ratio = json_get_double(jnode, "csr");
+    std::vector<double> user_a = jnode.at("user_angle");
+    this->user_angle = user_a;
+    std::vector<double> user_i = jnode.at("user_intensity");
+    this->user_intensity = user_i;
+    std::string gen_type_string = jnode.at("gen_type");
+    this->my_gen_type = get_enum_from_string(gen_type_string, GenTypeMap, GenType::UNKNOWN);
+    if (my_gen_type == GenType::UNKNOWN)
+    {
+        throw std::runtime_error("Error reading gen type");
+    }
+
+    std::array<double, 3> pos = jnode.at("pos").get<std::array<double, 3>>();
+    glm::dvec3 pos_vec = from_array(pos);
+    this->my_position = pos_vec;
+}
 
 void Sun::set_gaussian_distribution(double _sigma)
 {
@@ -157,6 +188,80 @@ void Sun::set_shape(SunShape shape,
     }
 
     return;
+}
+
+double Sun::get_max_sun_angle(double gaussian_coverage) const   // [mrad]
+{
+    switch (this->my_shape)
+    {
+        case (SunShape::PILLBOX):
+            return this->half_width;
+        case (SunShape::GAUSSIAN):
+        {
+            // Returns maximum angle given the desired coverage area
+            // With 100% coverage area, r is inf
+            if (std::isnan(gaussian_coverage) || std::isinf(gaussian_coverage) ||
+                gaussian_coverage <= 0.0 || gaussian_coverage >= 1.0)
+            {
+                throw std::runtime_error(
+                    "Sun::get_max_sun_angle: coverage fraction must be in (0, 1) for gaussian sunshape");
+            }
+            if (std::isnan(this->sigma) || std::isinf(this->sigma) || this->sigma <= 0.0)
+            {
+                throw std::runtime_error(
+                    "Sun::get_max_sun_angle: invalid sigma for gaussian sunshape");
+            }
+            const double r = this->sigma * std::sqrt(-2.0 * std::log(1.0 - gaussian_coverage));
+            return r;
+        }
+        case (SunShape::LIMBDARKENED):
+            return 4.65;    // Will need to update if we make this user input
+        case (SunShape::BUIE_CSR):
+            return 43.6;    // Constant
+        case (SunShape::USER_DEFINED):
+        {
+            if (this->user_angle.empty())
+            {
+                throw std::runtime_error("Sun::get_max_sun_angle: user-defined sun shape has no angles");
+            }
+            return *std::max_element(this->user_angle.begin(), this->user_angle.end());
+        }
+        default:
+        {
+            throw std::runtime_error("Sun::get_max_sun_angle: sun shape not currently supported");
+        }
+    }
+}
+
+double Sun::get_max_intensity() const
+{
+    switch (this->my_shape)
+    {
+        case (SunShape::USER_DEFINED):
+        {
+            if (this->user_intensity.empty())
+            {
+                throw std::runtime_error("Sun::get_max_intensity: user-defined sun shape has no intensities");
+            }
+            return *std::max_element(this->user_intensity.begin(), this->user_intensity.end());
+        }  
+        default:
+            return 1;
+    }
+}
+
+void Sun::write_json(nlohmann::ordered_json& jnode)
+{
+    jnode["source_type"] = "Sun";
+    std::string shape_string = SolTrace::Data::SunShapeMap.at(this->my_shape);
+    jnode["my_shape"] = shape_string;
+    jnode["sigma"] = this->sigma;
+    jnode["half_width"] = this->half_width;
+    jnode["csr"] = this->circumsolar_ratio;
+    jnode["user_angle"] = this->user_angle;
+    jnode["user_intensity"] = this->user_intensity;
+    jnode["gen_type"] = SolTrace::Data::GenTypeMap.at(this->my_gen_type);
+    jnode["pos"] = to_array(this->my_position);
 }
 
 } // namespace SolTrace::Data

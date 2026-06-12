@@ -52,6 +52,8 @@
 #include <memory>
 #include <sstream>
 
+#include "glm/ext/matrix_transform.hpp"
+
 #include "calculator_factory.hpp"
 #include "matvec.hpp"
 #include "native_runner_types.hpp"
@@ -128,16 +130,12 @@ namespace SolTrace::NativeRunner
                            icalc(nullptr),
                            Optics()
     {
-        int i, j;
-        for (i = 0; i < 3; i++)
-        {
-            // Origin[i] = AimPoint[i] = Euler[i] = PosSunCoords[i] = 0;
-            Origin[i] = AimPoint[i] = PosSunCoords[i] = 0;
-            // PosSunCoords[i] = 0;
-        }
-        for (i = 0; i < 3; i++)
-            for (j = 0; j < 3; j++)
-                RRefToLoc[i][j] = RLocToRef[i][j] = 0;
+        Origin = glm::dvec3{0.0};
+        AimPoint = glm::dvec3{0.0};
+        PosSunCoords = glm::dvec3{0.0};
+
+        RRefToLoc = {0.0};
+        RLocToRef = {0.0};
 
         // ZRot = 0;
         ZAperture = 0;
@@ -161,17 +159,16 @@ namespace SolTrace::NativeRunner
 
     void TSun::Reset()
     {
-        int i, j;
-        for (i = 0; i < 3; i++)
-            Origin[i] = Euler[i] = 0;
-        for (i = 0; i < 3; i++)
-            for (j = 0; j < 3; j++)
-                RRefToLoc[i][j] = RLocToRef[i][j] = 0;
+        Origin = glm::dvec3{0.0};
+        Euler = glm::dvec3{0.0};
+        RRefToLoc = {0.0};
+        RLocToRef = {0.0};
 
         PointSource = false;
         // ShapeIndex = ' ';
         ShapeIndex = SunShape::GAUSSIAN;
         Sigma = 0;
+        GenTypeIndex = SolTrace::Data::GenType::UNKNOWN;
 
         MaxAngle = 0;
         MaxIntensity = 0;
@@ -266,8 +263,8 @@ namespace SolTrace::NativeRunner
     }
 
     TRayData::ray_t_ptr TRayData::Append(unsigned thread_id,
-                                         double pos[3],
-                                         double cos[3],
+                                         glm::dvec3& pos,
+                                         glm::dvec3& cos,
                                          int element,
                                          int stage,
                                          uint_fast64_t raynum,
@@ -283,8 +280,8 @@ namespace SolTrace::NativeRunner
 
         if (r != nullptr)
         {
-            std::memcpy(&r->pos, pos, sizeof(double) * 3);
-            std::memcpy(&r->cos, cos, sizeof(double) * 3);
+            r->pos = pos;
+            r->cos = cos;
             r->element = element;
             r->stage = stage;
             r->raynum = this->GetRayId(thread_id, raynum);
@@ -324,11 +321,11 @@ namespace SolTrace::NativeRunner
     }
 
     bool TRayData::Query(uint_fast64_t idx,
-                         double pos[3],
-                         double cos[3],
-                         int *element,
-                         int *stage,
-                         uint_fast64_t *raynum,
+                         glm::dvec3& pos,
+                         glm::dvec3& cos,
+                         int* element,
+                         int* stage,
+                         uint_fast64_t* raynum,
                          SolTrace::Result::RayEvent *rev) const
     {
 
@@ -336,10 +333,9 @@ namespace SolTrace::NativeRunner
 
         if (r != nullptr)
         {
-            if (pos != nullptr)
-                std::memcpy(pos, r->pos, sizeof(double) * 3);
-            if (cos != nullptr)
-                std::memcpy(cos, r->cos, sizeof(double) * 3);
+            pos = r->pos;
+            cos = r->cos;
+
             if (element != nullptr)
                 *element = r->element;
             if (stage != nullptr)
@@ -400,14 +396,14 @@ namespace SolTrace::NativeRunner
 
         for (uint_fast64_t i = 0; i < n; ++i)
         {
-            double pos[3], cos[3];
+            glm::dvec3 pos, cos;
             int elm, stage;
             uint_fast64_t ray;
             SolTrace::Result::RayEvent rev;
             if (Query(i, pos, cos, &elm, &stage, &ray, &rev))
             {
                 printf("   [%llu] = { [%lg,%lg,%lg][%lg,%lg,%lg] %d %d %llu %s\(%d) }\n",
-                       i,
+                       static_cast<long long unsigned>(i),
                        pos[0], pos[1], pos[2],
                        cos[0], cos[1], cos[2],
                        elm,
@@ -469,8 +465,9 @@ namespace SolTrace::NativeRunner
     }
 
     telement_ptr make_telement(element_ptr el,
-                               int_fast64_t el_num,
-                               const ElementParameters &eparams)
+                               tstage_ptr my_stage,
+                               const ElementParameters &eparams,
+                               const SolTrace::Data::OpticalPropertySet& optics)
     {
         // std::cout << "Name: " << el->get_name()
         //           << "\nSDID: " << el->get_id()
@@ -478,27 +475,28 @@ namespace SolTrace::NativeRunner
         //           << std::endl;
 
         telement_ptr telem = std::make_shared<TElement>();
-        vector_copy(telem->Origin, el->get_origin_stage());
-        vector_copy(telem->AimPoint, el->get_aim_vector_stage());
+        telem->Origin = el->get_origin_stage();
+        telem->AimPoint = el->get_aim_vector_stage();
         telem->ZRot = el->get_zrot();
 
         // vector_copy(telem->Euler, el->get_euler_angles());
-        matrix_copy(telem->RRefToLoc, el->get_stage_to_local());
-        matrix_copy(telem->RLocToRef, el->get_local_to_stage());
+        telem->RRefToLoc = el->get_stage_to_local();
+        telem->RLocToRef = el->get_local_to_stage();
 
         telem->aperture = el->get_aperture()->make_copy();
+        telem->surface = el->get_surface()->make_copy();
         telem->icalc =
             CalculatorFactory::get()->make_calculator(telem->aperture,
                                                       el->get_surface(),
                                                       eparams);
 
         // How to handle optical properties?
-        telem->Optics.Front = *el->get_front_optical_properties();
-        telem->Optics.Back = *el->get_back_optical_properties();
+        telem->Optics = optics;
 
-        // telem->element_number = el->get_id();
         telem->sim_data_id = el->get_id();
-        telem->element_number = el_num;
+        telem->element_number = my_stage->next_element_number();
+
+        telem->parent_stage = my_stage;
 
         return telem;
     }
@@ -508,12 +506,12 @@ namespace SolTrace::NativeRunner
         tstage_ptr my_stage = std::make_shared<TStage>();
 
         // Use global coordinates as stage coordinates
-        ZeroVec3(my_stage->Origin);
-        ZeroVec3(my_stage->AimPoint);
+        my_stage->Origin = glm::dvec3{0.0};
+        my_stage->AimPoint = glm::dvec3{0.0};
         my_stage->AimPoint[2] = 1.0;
         my_stage->ZRot = 0.0;
-        IdentityMat3(my_stage->RRefToLoc);
-        IdentityMat3(my_stage->RLocToRef);
+        my_stage->RRefToLoc = glm::identity<glm::dmat3>();
+        my_stage->RLocToRef = glm::identity<glm::dmat3>();
 
         return my_stage;
     }
@@ -533,11 +531,11 @@ namespace SolTrace::NativeRunner
         my_stage->stage_id = stage_el->get_stage();
 
         // Add coordinate stuff
-        vector_copy(my_stage->Origin, stage_el->get_origin_global());
-        vector_copy(my_stage->AimPoint, stage_el->get_aim_vector_global());
+        my_stage->Origin = stage_el->get_origin_global();
+        my_stage->AimPoint = stage_el->get_aim_vector_global();
         my_stage->ZRot = stage_el->get_zrot();
-        matrix_copy(my_stage->RRefToLoc, stage_el->get_global_to_local());
-        matrix_copy(my_stage->RLocToRef, stage_el->get_local_to_global());
+        my_stage->RRefToLoc = stage_el->get_global_to_local();
+        my_stage->RLocToRef = stage_el->get_local_to_global();
 
         return my_stage;
     }

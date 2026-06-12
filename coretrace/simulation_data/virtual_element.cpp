@@ -3,22 +3,53 @@
 
 namespace SolTrace::Data {
 
-void VirtualElement::set_virtual_optics(OpticalProperties &op)
+
+VirtualElement::VirtualElement() 
+    : SingleElement()
 {
-    op.my_type = InteractionType::REFRACTION;
-    op.reflectivity = 0.0;
-    op.slope_error = 0.0;
-    op.specularity_error = 0.0;
-    op.transmitivity = 1.0;
-    op.refraction_index_front = 1.0;
-    op.refraction_index_back = 1.0;
-    return;
+    auto optics = std::make_shared<OpticalPropertySet>(
+        InteractionType::REFRACTION,
+        1.0,
+        1.0,
+        "VirtualProp");
+
+    optics->set_properties(
+        OpticalSide::Both,
+        DistributionType::NONE,
+        1.0,
+        0.0,
+        0.0,
+        0.0);
+
+    this->owned_optical_property_set = optics;
+    OpticalPropertySetReference optics_ref = { OPTICS_ID_VIRTUAL, 
+        this->owned_optical_property_set };
+
+    this->set_optical_property_set(optics_ref);
 }
 
-VirtualElement::VirtualElement() : SingleElement()
+VirtualElement::VirtualElement(const nlohmann::ordered_json& jnode,
+    const OpticalPropertySetResolver& resolve_optics) : SingleElement(jnode, resolve_optics)
 {
-    set_virtual_optics(this->optics_front);
-    set_virtual_optics(this->optics_back);
+    auto optics = std::make_shared<OpticalPropertySet>(
+        InteractionType::REFRACTION,
+        1.0,
+        1.0,
+        "VirtualProp");
+
+    optics->set_properties(
+        OpticalSide::Both,
+        DistributionType::NONE,
+        1.0,
+        0.0,
+        0.0,
+        0.0);
+
+    this->owned_optical_property_set = optics;
+    OpticalPropertySetReference optics_ref = { OPTICS_ID_VIRTUAL,
+        this->owned_optical_property_set };
+
+    this->set_optical_property_set(optics_ref);
 }
 
 VirtualElement::~VirtualElement()

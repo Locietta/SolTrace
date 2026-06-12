@@ -15,16 +15,16 @@ namespace SolTrace::NativeRunner
         SphereCalculator(SolTrace::Data::surface_ptr surf,
                          SolTrace::Data::aperture_ptr ap);
         virtual ~SphereCalculator() {}
-        virtual int intersect(const double PosLoc[3],
-                              const double CosLoc[3],
-                              double PosXYZ[3],
-                              double CosKLM[3],
-                              double DFXYZ[3],
-                              double *PathLength);
+        virtual int intersect(const glm::dvec3 PosLoc,
+                              const glm::dvec3 CosLoc,
+                              glm::dvec3& PosXYZ,
+                              glm::dvec3& CosKLM,
+                              glm::dvec3& DFXYZ,
+                              double *PathLength) override;
 
-        void surface_normal(const double PosXYZ[3], double DFXYZ[3]);
+        void surface_normal(const glm::dvec3 PosXYZ, glm::dvec3& DFXYZ);
 
-        virtual double compute_z_aperture(SolTrace::Data::aperture_ptr ap);
+        virtual double compute_z_aperture(SolTrace::Data::aperture_ptr ap) override;
 
     private:
         double radius;

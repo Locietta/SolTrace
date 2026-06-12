@@ -5,7 +5,7 @@
 #include <cstdint>
 
 #include "simulation_data_export.hpp"
-// #include "vector3d.hpp"
+// #include "glm::dvec3.hpp"
 
 namespace SolTrace::NativeRunner
 {
@@ -20,11 +20,11 @@ namespace SolTrace::NativeRunner
     {
     }
 
-    int NewtonCalculator::intersect(const double PosLoc[3],
-                                    const double CosLoc[3],
-                                    double PosXYZ[3],
-                                    double CosKLM[3],
-                                    double DFXYZ[3],
+    int NewtonCalculator::intersect(const glm::dvec3 PosLoc,
+                                    const glm::dvec3 CosLoc,
+                                    glm::dvec3 &PosXYZ,
+                                    glm::dvec3 &CosKLM,
+                                    glm::dvec3 &DFXYZ,
                                     double *PathLength)
     {
         int sts = 1;
@@ -32,25 +32,25 @@ namespace SolTrace::NativeRunner
 
         // double x0 = PosLoc[0], y0 = PosLoc[1], z0 = PosLoc[2];
         // double mx = CosLoc[0], my = CosLoc[1], mz = CosLoc[2];
-        Vector3d u0(PosLoc);
-        Vector3d dt(CosLoc);
+        glm::dvec3 u0(PosLoc);
+        glm::dvec3 dt(CosLoc);
 
         double t0 = 0.0;
         double delta = 0.0;
         // double res;
         double fvalue;
         double fprime;
-        Vector3d v0(PosLoc);
-        Vector3d dv;
+        glm::dvec3 v0(PosLoc);
+        glm::dvec3 dv;
 
         *PathLength = 0.0;
-        ZeroVec3(PosXYZ);
-        ZeroVec3(CosKLM);
-        ZeroVec3(DFXYZ);
+        PosXYZ = {};
+        CosKLM = {};
+        DFXYZ = {};
 
         // this->set_zstart(v0.data);
-        this->surface_and_jacobian(v0.data, &fvalue, dv.data);
-        fprime = dot_product(dv, dt);
+        this->surface_and_jacobian(v0, &fvalue, dv);
+        fprime = glm::dot(dv, dt);
 
         // std::cout << "Tolerance: " << this->tolerance << std::endl;
 
@@ -66,9 +66,9 @@ namespace SolTrace::NativeRunner
             delta = fvalue / fprime;
             t0 -= delta;
             // Updates v0 to (x0, y0, z0) + t0 * (mx, my, mz)
-            vector_add(1.0, u0, t0, dt, v0);
-            this->surface_and_jacobian(v0.data, &fvalue, dv.data);
-            fprime = dot_product(dv, dt);
+            v0 = u0 + t0 * dt;
+            this->surface_and_jacobian(v0, &fvalue, dv);
+            fprime = glm::dot(dv, dt);
             ++count;
         }
 
@@ -77,9 +77,9 @@ namespace SolTrace::NativeRunner
         {
             sts = 0;
             *PathLength = t0;
-            CopyVec3(CosKLM, CosLoc);
-            CopyVec3(PosXYZ, v0.data);
-            CopyVec3(DFXYZ, dv.data);
+            CosKLM = CosLoc;
+            PosXYZ = v0;
+            DFXYZ = dv;
         }
 
         return sts;

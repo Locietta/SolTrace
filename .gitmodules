@@ -4,6 +4,3 @@
 [submodule "external/wex"]
 	path = external/wex
 	url = git@github.com:NREL/wex.git
-[submodule "external/OptixCSP"]
-	path = external/OptixCSP
-	url = https://github.com/uwsbel/OptixCSP.git

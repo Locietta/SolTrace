@@ -6,11 +6,11 @@
 namespace SolTrace::NativeRunner {
 
 void DetermineElementIntersectionNew(TElement *Element,
-                                     double PosRayIn[3],
-                                     double CosRayIn[3],
-                                     double PosRayOut[3],
-                                     double CosRayOut[3],
-                                     double DFXYZ[3],
+                                     glm::dvec3 PosRayIn,
+                                     glm::dvec3 CosRayIn,
+                                     glm::dvec3& PosRayOut,
+                                     glm::dvec3& CosRayOut,
+                                     glm::dvec3& DFXYZ,
                                      double *PathLength,
                                      int *ErrorFlag,
                                      int *Intercept,

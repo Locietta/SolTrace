@@ -11,9 +11,12 @@
 #ifndef SOLTRACE_SUN_H
 #define SOLTRACE_SUN_H
 
+#include <nlohmann/json.hpp>
+
 #include "ray_source.hpp"
 #include "datetime.hpp"
-#include "vector3d.hpp"
+
+#include <glm/vec3.hpp>
 
 namespace SolTrace::Data {
 
@@ -21,32 +24,35 @@ class Sun : public RaySource
 {
 public:
     Sun() : my_shape(SunShape::UNKNOWN),
-            my_position(Vector3d(std::numeric_limits<double>::quiet_NaN(), 
-                std::numeric_limits<double>::quiet_NaN(), 
-                std::numeric_limits<double>::quiet_NaN()))
-    { this->my_position.zero(); }
+            my_position(0.0),
+            my_gen_type(GenType::RANDOM)
+    { }
+
+    Sun(const nlohmann::ordered_json& jnode);
+
     virtual ~Sun() {}
 
-    virtual const Vector3d &get_position() const
+    virtual const glm::dvec3 &get_position() const override
     {
         return this->my_position;
     }
-    virtual Vector3d &get_position()
+ 
+    virtual glm::dvec3 &get_position() override
     {
         return this->my_position;
     }
-    virtual void set_position(const Vector3d &pos)
+    virtual void set_position(const glm::dvec3 &pos) override
     {
         this->my_position = pos;
         return;
     }
-    virtual void set_position(double x, double y, double z)
+    virtual void set_position(double x, double y, double z) override
     {
-        this->my_position.set_values(x, y, z);
+        this->my_position = glm::dvec3(x, y, z);
         return;
     }
-    virtual void set_position(const DateTime &, double lat, double long) {}
-    virtual SunShape get_shape() const
+    virtual void set_position(const DateTime &, double lat, double long) override {}
+    virtual SunShape get_shape() const override
     {
         return this->my_shape;
     }
@@ -55,8 +61,14 @@ public:
                            double _half_width,
                            double _csr,        
                            std::vector<double> _user_angle = {},
-                           std::vector<double> _user_intensity = {});
-    virtual void calculate_buie_parameters(double& kappa, double& gamma);
+                           std::vector<double> _user_intensity = {}) override;
+    virtual void calculate_buie_parameters(double& kappa, double& gamma) override;
+    virtual double get_max_sun_angle(double gaussian_coverage = 0.999) const override;  //  [mrad]
+    virtual double get_max_intensity() const override;
+    virtual void set_gen_type(GenType type) override { my_gen_type = type; }
+    virtual GenType get_gen_type() const override { return my_gen_type; }
+
+    void write_json(nlohmann::ordered_json& jnode);
 
 private:
     void set_gaussian_distribution(double _sigma);
@@ -66,7 +78,8 @@ private:
                                        std::vector<double> _user_intensity);
 
     SunShape my_shape;
-    Vector3d my_position;
+    glm::dvec3 my_position;
+    GenType my_gen_type;
 };
 
 } // namespace SolTrace::Data

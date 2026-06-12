@@ -17,7 +17,7 @@ uint_fast64_t count_event_native(const SolTrace::NativeRunner::TRayData *ray_dat
     size_t n = ray_data->Count();
     for (size_t i = 0; i < n; i++)
     {
-        double pos[3], cos[3];
+        glm::dvec3 pos, cos;
         int elm, stage;
         uint_fast64_t ray;
         SolTrace::Result::RayEvent rev;
@@ -36,7 +36,7 @@ void scan_events_native(const SolTrace::NativeRunner::TRayData *ray_data)
     std::map<unsigned, SolTrace::Result::RayEvent> ray_end;
     for (size_t i = 0; i < n; i++)
     {
-        double pos[3], cos[3];
+        glm::dvec3 pos, cos;
         int elm, stage;
         uint_fast64_t ray;
         SolTrace::Result::RayEvent rev;

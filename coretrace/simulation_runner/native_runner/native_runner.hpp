@@ -39,11 +39,28 @@ namespace SolTrace::NativeRunner
         virtual RunnerStatus report_simulation(SolTrace::Result::SimulationResult *result,
                                                int level_spec) override;
 
+        virtual uint_fast64_t get_number_rays_launched() const override
+        {
+            return tsys.SunRayCount;
+        }
+        virtual uint_fast64_t get_number_rays_traced() const override
+        {
+            // TODO: This could be wrong if we hit max number of rays before getting this many hits.
+            // At the moment max number of rays is ignored though...
+            // return tsys.sim_raycount;
+            return tsys.SunRayCount > 0 ? tsys.sim_raycount : 0;
+        }
+
         // Runner options
         void disable_power_tower() { this->as_power_tower = false; }
         void enable_power_tower() { this->as_power_tower = true; }
         void disable_point_focus() { this->tsys.sim_dynamic_group = false; }
         void enable_point_focus() { this->tsys.sim_dynamic_group = true; }
+
+        // Only applies BEFORE setup_simulation()
+        void disable_stages() { this->use_stages = false; }
+        void enable_stages() { this->use_stages = true; }
+
         void set_newton_tolerance(double tol)
         {
             this->eparams.newton_tolerance = tol;
@@ -80,7 +97,7 @@ namespace SolTrace::NativeRunner
 
         void print_log(std::ostream &os)
         {
-            this->my_manager->print_log(os);
+            this->my_logger->print_log(os);
             return;
         }
 
@@ -109,9 +126,12 @@ namespace SolTrace::NativeRunner
         RunnerStatus setup_sun(const SolTrace::Data::SimulationData *data);
         RunnerStatus setup_elements(const SolTrace::Data::SimulationData *data);
 
-    private:
+    protected:
         // Use power tower speed ups
         bool as_power_tower;
+
+        // Group elements in stages
+        bool use_stages = true;
 
         // Number of threads to use when tracing
         uint_fast64_t number_of_threads;
@@ -120,12 +140,21 @@ namespace SolTrace::NativeRunner
 
         ElementParameters eparams;
 
+        trace_logger_ptr my_logger;
         thread_manager_ptr my_manager;
         TSystem tsys;
 
         bool set_aperture_planes(TSystem *tsys);
         bool set_aperture_planes(tstage_ptr stage);
         bool aperture_plane(telement_ptr Element);
+
+        void set_seeds();
+
+        void check_supported_optical_distribution(
+            SolTrace::Data::DistributionType dt);
+        void check_supported_options(telement_ptr telem);
+
+    private:
     };
 
 } // namespace SolTrace::NativeRunner

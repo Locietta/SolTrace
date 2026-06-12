@@ -266,18 +266,120 @@ namespace SolTrace::Data
         /*{Fill in elements of the transformation matrix as per Spencer and Murty paper
          page 673 equation (2)}*/
         RRefToLoc[0][0] = CosAlpha * CosGamma + SinAlpha * SinBeta * SinGamma;
-        RRefToLoc[0][1] = -CosBeta * SinGamma;
-        RRefToLoc[0][2] = -SinAlpha * CosGamma + CosAlpha * SinBeta * SinGamma;
-        RRefToLoc[1][0] = CosAlpha * SinGamma - SinAlpha * SinBeta * CosGamma;
+        RRefToLoc[1][0] = -CosBeta * SinGamma;
+        RRefToLoc[2][0] = -SinAlpha * CosGamma + CosAlpha * SinBeta * SinGamma;
+        RRefToLoc[0][1] = CosAlpha * SinGamma - SinAlpha * SinBeta * CosGamma;
         RRefToLoc[1][1] = CosBeta * CosGamma;
-        RRefToLoc[1][2] = -SinAlpha * SinGamma - CosAlpha * SinBeta * CosGamma;
-        RRefToLoc[2][0] = SinAlpha * CosBeta;
-        RRefToLoc[2][1] = SinBeta;
+        RRefToLoc[2][1] = -SinAlpha * SinGamma - CosAlpha * SinBeta * CosGamma;
+        RRefToLoc[0][2] = SinAlpha * CosBeta;
+        RRefToLoc[1][2] = SinBeta;
         RRefToLoc[2][2] = CosAlpha * CosBeta;
 
         /*{Transpose the matrix to get the inverse transformation matrix for going back
          to reference system.  This is used by the TransformToReference procedure.}*/
         MatrixTranspose(RRefToLoc, 3, RLocToRef);
+    }
+
+    void TransformToLocal(const glm::dvec3& PosRef,
+                          const glm::dvec3& CosRef,
+                          const glm::dvec3& Origin,
+                          const glm::dmat3& RRefToLoc,
+                          glm::dvec3& PosLoc,
+                          glm::dvec3& CosLoc)
+    {
+        /*{Multiply the position vector and the direction cosine vector by the transformation
+         matrix to get the new vectors in the local system.  The position vector is first
+         referenced to the origin of the local frame.}*/
+        glm::dvec3 PosDum = PosRef - Origin;
+
+        PosLoc = RRefToLoc * PosDum;
+        CosLoc = RRefToLoc * CosRef;
+    }
+
+    void TransformToReference(const glm::dvec3& PosLoc,
+                              const glm::dvec3& CosLoc,
+                              const glm::dvec3& Origin,
+                              const glm::dmat3& RLocToRef,
+                              glm::dvec3& PosRef,
+                              glm::dvec3& CosRef)
+    {
+        /*{Purpose:  To perform coordinate transformation from local system to reference
+                   system.
+                   Input -
+                         PosLoc = X,Y,Z coordinates of ray point in local system
+                         CosLoc = Direction cosines of ray in Loc system
+                         Origin = X,Y,Z coordinates of origin of local system as measured
+                                  in reference system
+                         RLocToRef = Rotation matrices required for coordinate transform
+                                     from local to reference (inverse of reference to
+                                     local transformation)
+                   Output -
+                         PosRef = X,Y,Z coordinates of ray point in reference system
+                         CosRef = Direction cosines of ray in reference system}*/
+
+        /*{Use previously calculated RLocToRef matrix (in TransformToLocal) to obtain the
+         inverse transformation back to Reference system.}*/
+
+        glm::dvec3 PosDum = RLocToRef * PosLoc;
+        CosRef = RLocToRef * CosLoc;
+
+        PosRef = PosDum + Origin;
+    }
+
+    void CalculateTransformMatrices(const glm::dvec3& Euler,
+                                    glm::dmat3& RRefToLoc,
+                                    glm::dmat3& RLocToRef)
+    {
+        /*{input:  Euler = Euler angles
+         output: RRefToLoc = Transformation matrix from Reference to Local system
+                 RLocToRef = ""             ""     ""   Local to Reference system (transpose of above)} */
+        double Alpha = 0.0;
+        double Beta = 0.0;
+        double Gamma = 0.0;
+        double CosAlpha = 0.0;
+        double CosBeta = 0.0;
+        double CosGamma = 0.0;
+        double SinAlpha = 0.0;
+        double SinBeta = 0.0;
+        double SinGamma = 0.0;
+
+        /*{Offload Alpha, Beta and Gamma: the three Euler rotations from Ref frame to Local
+         frame. Also calculate their cosines.}*/
+        Alpha = Euler.x;
+        Beta = Euler.y;
+        Gamma = Euler.z;
+        CosAlpha = cos(Alpha);
+        CosBeta = cos(Beta);
+        CosGamma = cos(Gamma);
+        SinAlpha = sin(Alpha);
+        SinBeta = sin(Beta);
+        SinGamma = sin(Gamma);
+
+        /*{Fill in elements of the transformation matrix as per Spencer and Murty paper
+         page 673 equation (2)}*/
+        // RRefToLoc[0][0] = CosAlpha * CosGamma + SinAlpha * SinBeta * SinGamma;
+        // RRefToLoc[1][0] = -CosBeta * SinGamma;
+        // RRefToLoc[2][0] = -SinAlpha * CosGamma + CosAlpha * SinBeta * SinGamma;
+        // RRefToLoc[0][1] = CosAlpha * SinGamma - SinAlpha * SinBeta * CosGamma;
+        // RRefToLoc[1][1] = CosBeta * CosGamma;
+        // RRefToLoc[2][1] = -SinAlpha * SinGamma - CosAlpha * SinBeta * CosGamma;
+        // RRefToLoc[0][2] = SinAlpha * CosBeta;
+        // RRefToLoc[1][2] = SinBeta;
+        // RRefToLoc[2][2] = CosAlpha * CosBeta;
+
+        RRefToLoc[0] = {CosAlpha * CosGamma + SinAlpha * SinBeta * SinGamma,
+                        CosAlpha * SinGamma - SinAlpha * SinBeta * CosGamma,
+                        SinAlpha * CosBeta};
+
+        RRefToLoc[1] = {-CosBeta * SinGamma, CosBeta * CosGamma, SinBeta};
+
+        RRefToLoc[2] = {-SinAlpha * CosGamma + CosAlpha * SinBeta * SinGamma,
+                        -SinAlpha * SinGamma - CosAlpha * SinBeta * CosGamma,
+                        CosAlpha * CosBeta};
+
+        /*{Transpose the matrix to get the inverse transformation matrix for going back
+         to reference system.  This is used by the TransformToReference procedure.}*/
+        RLocToRef = glm::transpose(RRefToLoc);
     }
 
     // void AddVec3(double a, const double x[3],

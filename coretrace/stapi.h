@@ -72,6 +72,16 @@ extern "C" {
 typedef unsigned long     st_uint_t;     // unsigned integer type, at least 32 bits, could be 64 bit in the future
 typedef void*             st_context_t;  // opaque reference type, 32 or 64 bit, depending on system/compiler
 
+/* Runner types for st_sim_run_SolTrace20 */
+typedef enum st_runner_type_t {
+	ST_RUNNER_LEGACY = 0,      /* legacy */
+	ST_RUNNER_NATIVE,           /* 1 */
+	ST_RUNNER_NATIVE_FILE,		/* 2 */
+	ST_RUNNER_OPTIX,            /* 3 */
+	ST_RUNNER_EMBREE,			/* 5 */
+	ST_RUNNER_COUNT             /* sentinel (not a valid runner) */
+} st_runner_type_t;
+
 /* functions to create system contexts */
 STCORE_API st_context_t st_create_context();
 STCORE_API int st_free_context(st_context_t pcxt);
@@ -157,7 +167,8 @@ STCORE_API int st_sim_run( st_context_t pcxt, unsigned int seed,
 						  int (*callback)(st_uint_t ntracedtotal, st_uint_t ntraced, st_uint_t ntotrace, st_uint_t curstage, st_uint_t nstages, void *data), void *data);
 STCORE_API int st_sim_run_with_refactor(st_context_t pcxt, unsigned int seed,
 	int (*callback)(st_uint_t ntracedtotal, st_uint_t ntraced, st_uint_t ntotrace, st_uint_t curstage, st_uint_t nstages, void* data), void* data, bool use_refactor_trace);
-
+STCORE_API int st_sim_run_SolTrace20(st_context_t pcxt, unsigned int seed, st_runner_type_t runner_type, const char** error_msg, 
+	const char* file_name = "", int nthreads = 1);
 /*
 STCORE_API int st_sim_run_data( st_context_t pcxt, unsigned int seed, std::vector<std::vector< double > > *data_s1, std::vector<std::vector< double > > *data_s2, bool save_stage_data,
 						  int (*callback)(st_uint_t ntracedtotal, st_uint_t ntraced, st_uint_t ntotrace, st_uint_t curstage, st_uint_t nstages, void *data), void *data);

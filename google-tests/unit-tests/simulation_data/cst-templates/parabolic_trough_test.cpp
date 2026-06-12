@@ -2,15 +2,18 @@
 
 #include <native_runner.hpp>
 #include <native_runner_types.hpp>
+#include <optical_properties.hpp>
 #include <simulation_data.hpp>
 #include <sun.hpp>
+#include <utilities.hpp>
 
 #include <cst_templates/arclength.hpp>
 #include <cst_templates/parabolic_trough.hpp>
-#include <cst_templates/utilities.hpp>
 
 #include "common.hpp"
 #include "count_absorbed_native.h"
+
+#include <glm/gtx/io.hpp>
 
 using ParabolicTrough = SolTrace::Data::ParabolicTrough;
 
@@ -134,6 +137,11 @@ TEST(ParabolicTrough, ErrorChecking_CreateGeometryWithoutParameters)
 {
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
 
+    SimulationData sd;
+    auto optics = OpticalPropertySet();
+    auto optics_ref = sd.add_optical_property_set(optics);
+    pt->set_optics(optics_ref, optics_ref, optics_ref, optics_ref);
+
     // Test create_geometry without setting required parameters
     EXPECT_THROW(pt->create_geometry(), std::invalid_argument);
 
@@ -156,24 +164,12 @@ TEST(ParabolicTrough, ErrorChecking_CreateGeometryWithoutParameters)
 
 TEST(ParabolicTrough, Build)
 {
-    OpticalProperties mirror;
-    mirror.set_ideal_reflection();
-
-    OpticalProperties absorber;
-    absorber.set_ideal_absorption();
-
-    OpticalProperties envelop_out;
-    envelop_out.set_ideal_transmission();
-    envelop_out.refraction_index_front = 1.46;
-    envelop_out.refraction_index_back = 1.0;
-
-    OpticalProperties envelop_in;
-    envelop_in.set_ideal_transmission();
-    envelop_in.refraction_index_front = 1.0;
-    envelop_in.refraction_index_back = 1.46;
-
+    SimulationData sd;
+    auto optics = OpticalPropertySet();
+    auto optics_ref = sd.add_optical_property_set(optics);
+    
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
-    pt->set_optics(mirror, absorber, envelop_out, envelop_in);
+    pt->set_optics(optics_ref, optics_ref, optics_ref, optics_ref);
     pt->set_origin(20.0, -20.0, 30.0);
     pt->set_aperture_size(5.774, 11.96);
     pt->set_number_panels(4, 7);
@@ -184,7 +180,7 @@ TEST(ParabolicTrough, Build)
     pt->create_geometry();
 
     pt = SolTrace::Data::make_element<ParabolicTrough>();
-    pt->set_optics(mirror, absorber, envelop_out, envelop_in);
+    pt->set_optics(optics_ref, optics_ref, optics_ref, optics_ref);
     pt->set_origin(20.0, -20.0, 30.0);
     pt->set_aperture_size(5.774, 11.96);
     pt->set_number_panels(1, 7);
@@ -215,32 +211,30 @@ TEST(ParabolicTrough, Tracing)
     my_runner.disable_power_tower();
     my_runner.disable_point_focus();
 
-    OpticalProperties mirror;
-    mirror.set_ideal_reflection();
-    mirror.slope_error = 1.5;
-    mirror.specularity_error = 0.5;
+    SolTrace::Data::OpticalPropertySet mirror_optics(SolTrace::Data::InteractionType::REFLECTION,
+        0.0, 0.0, "Mirror");
+    mirror_optics.set_ideal_one_sided_reflector(SolTrace::Data::OpticalSide::Front);
+    mirror_optics.set_errors(SolTrace::Data::OpticalSide::Front, SolTrace::Data::DistributionType::NONE, 1.5, 0.5);
+    mirror_optics.set_errors(SolTrace::Data::OpticalSide::Back, SolTrace::Data::DistributionType::NONE, 1e-5, 1e-5);
+    auto mirror_opt_ref = my_sim.add_optical_property_set(mirror_optics);
 
-    OpticalProperties absorber;
-    absorber.set_ideal_absorption();
-    absorber.slope_error = 1e-5;
-    absorber.specularity_error = 1e-5;
+    auto absorber_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFLECTION, "Absorber");
+    absorber_optics.set_ideal_absorption(SolTrace::Data::OpticalSide::Both);
+    absorber_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-5, 1e-5);
+    auto abs_opt_ref = my_sim.add_optical_property_set(absorber_optics);
 
-    OpticalProperties envelop_out;
-    envelop_out.set_ideal_transmission();
-    envelop_out.refraction_index_front = 1.46;
-    envelop_out.refraction_index_back = 1.0;
-    envelop_out.slope_error = 1e-4;
-    envelop_out.specularity_error = 1e-4;
+    auto envelop_outer_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFRACTION, "EnvelopeOuter");
+    envelop_outer_optics.set_ideal_transmission(1.46, 1.0);
+    envelop_outer_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-4, 1e-4);
+    auto env_out_opt_ref = my_sim.add_optical_property_set(envelop_outer_optics);
 
-    OpticalProperties envelop_in;
-    envelop_in.set_ideal_transmission();
-    envelop_in.refraction_index_front = 1.0;
-    envelop_in.refraction_index_back = 1.46;
-    envelop_in.slope_error = 1e-4;
-    envelop_in.specularity_error = 1e-4;
+    auto envelop_inner_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFRACTION, "EnvelopeInner");
+    envelop_inner_optics.set_ideal_transmission(1.0, 1.46);
+    envelop_inner_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-4, 1e-4);
+    auto env_in_opt_ref = my_sim.add_optical_property_set(envelop_inner_optics);
 
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
-    pt->set_optics(mirror, absorber, envelop_out, envelop_in);
+    pt->set_optics(mirror_opt_ref, abs_opt_ref, env_out_opt_ref, env_in_opt_ref);
     pt->set_origin(20.0, -20.0, 30.0);
     pt->set_angles(0.0, 0.0);
     pt->set_aperture_size(6.0, 12.0);
@@ -258,7 +252,7 @@ TEST(ParabolicTrough, Tracing)
     my_sim.add_ray_source(sun);
 
     // Assumes that reference and global coordinates are the same
-    // Vector3d pt_aim_point;
+    // glm::dvec3 pt_aim_point;
     // vector_add(1.0, sun->get_position(), -1.0, pt->get_origin_ref(), pt_aim_point);
     // pt->set_aim_vector(pt_aim_point);
     pt->set_aim_vector(sun->get_position());
@@ -340,32 +334,34 @@ TEST(ParabolicTrough, UpdateGeometry)
     my_runner.disable_power_tower();
     my_runner.disable_point_focus();
 
-    OpticalProperties mirror;
-    mirror.set_ideal_reflection();
-    mirror.slope_error = 1.5;
-    mirror.specularity_error = 0.5;
+    SolTrace::Data::OpticalPropertySet mirror_optics(SolTrace::Data::InteractionType::REFLECTION,
+        0.0, 0.0, "Mirror");
+    mirror_optics.set_ideal_one_sided_reflector(SolTrace::Data::OpticalSide::Front);
+    mirror_optics.set_errors(SolTrace::Data::OpticalSide::Front, SolTrace::Data::DistributionType::NONE, 1.5, 0.5);
+    mirror_optics.set_errors(SolTrace::Data::OpticalSide::Back, SolTrace::Data::DistributionType::NONE, 1e-5, 1e-5);
 
-    OpticalProperties absorber;
-    absorber.set_ideal_absorption();
-    absorber.slope_error = 1e-5;
-    absorber.specularity_error = 1e-5;
+    auto mirror_opt_ref = my_sim.add_optical_property_set(mirror_optics);
 
-    OpticalProperties envelop_out;
-    envelop_out.set_ideal_transmission();
-    envelop_out.refraction_index_front = 1.46;
-    envelop_out.refraction_index_back = 1.0;
-    envelop_out.slope_error = 1e-4;
-    envelop_out.specularity_error = 1e-4;
+    auto absorber_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFLECTION, "Absorber");
+    absorber_optics.set_ideal_absorption(SolTrace::Data::OpticalSide::Both);
+    absorber_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-5, 1e-5);
 
-    OpticalProperties envelop_in;
-    envelop_in.set_ideal_transmission();
-    envelop_in.refraction_index_front = 1.0;
-    envelop_in.refraction_index_back = 1.46;
-    envelop_in.slope_error = 1e-4;
-    envelop_in.specularity_error = 1e-4;
+    auto abs_opt_ref = my_sim.add_optical_property_set(absorber_optics);
+
+    auto envelop_outer_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFRACTION, "EnvelopeOuter");
+    envelop_outer_optics.set_ideal_transmission(1.46, 1.0);
+    envelop_outer_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-4, 1e-4);
+
+    auto env_out_opt_ref = my_sim.add_optical_property_set(envelop_outer_optics);
+
+    auto envelop_inner_optics = SolTrace::Data::OpticalPropertySet(SolTrace::Data::InteractionType::REFRACTION, "EnvelopeInner");
+    envelop_inner_optics.set_ideal_transmission(1.0, 1.46);
+    envelop_inner_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 1e-4, 1e-4);
+    
+    auto env_in_opt_ref = my_sim.add_optical_property_set(envelop_inner_optics);
 
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
-    pt->set_optics(mirror, absorber, envelop_out, envelop_in);
+    pt->set_optics(mirror_opt_ref, abs_opt_ref, env_out_opt_ref, env_in_opt_ref);
     pt->set_origin(10.0, 0.0, 0.0);
     // pt->set_origin(0.0, 0.0, 0.0);
     pt->set_angles(30.0, 10.0);
@@ -384,9 +380,9 @@ TEST(ParabolicTrough, UpdateGeometry)
 
     pt->update_geometry(sun_az, sun_el);
 
-    Vector3d sun_pos;
-    sun_position_vector_degrees(sun_pos, sun_az, sun_el);
-    sun_pos.scalar_mult(1000.0);
+    glm::dvec3 sun_pos;
+    SolTrace::Data::sun_position_vector_degrees(sun_pos, sun_az, sun_el);
+    sun_pos *= 1000.0;
     auto sun = SolTrace::Data::make_ray_source<Sun>();
     sun->set_position(sun_pos);
     sun->set_shape(SolTrace::Data::SunShape::PILLBOX, 0.0, 1.0, 0.0);
@@ -401,12 +397,12 @@ TEST(ParabolicTrough, UpdateGeometry)
               << "\nZ-Rotation: " << pt->get_zrot()
               << std::endl;
 
-    EXPECT_NEAR(dot_product(pt->get_tracking_origin(), pt->get_rotation_vector()), 0.0, TOL);
-    EXPECT_NEAR(dot_product(pt->get_tracking_origin(), pt->get_neutral_normal()), 0.0, TOL);
-    EXPECT_NEAR(dot_product(pt->get_rotation_vector(), pt->get_neutral_normal()), 0.0, TOL);
+    EXPECT_NEAR(glm::dot(pt->get_tracking_origin(), pt->get_rotation_vector()), 0.0, TOL);
+    EXPECT_NEAR(glm::dot(pt->get_tracking_origin(), pt->get_neutral_normal()), 0.0, TOL);
+    EXPECT_NEAR(glm::dot(pt->get_rotation_vector(), pt->get_neutral_normal()), 0.0, TOL);
 
-    Vector3d temp, result;
-    rotate_vector_degrees(pt->get_rotation_vector(),
+    glm::dvec3 temp, result;
+    SolTrace::Data::rotate_vector_degrees(pt->get_rotation_vector(),
                           pt->get_tracking_origin(),
                           pt->get_tracking_angle_degrees(),
                           temp);
@@ -422,7 +418,7 @@ TEST(ParabolicTrough, UpdateGeometry)
     EXPECT_NEAR(result[1], 1.0, TOL);
     EXPECT_NEAR(result[2], 0.0, TOL);
 
-    rotate_vector_degrees(pt->get_rotation_vector(),
+    SolTrace::Data::rotate_vector_degrees(pt->get_rotation_vector(),
                           pt->get_neutral_normal(),
                           pt->get_tracking_angle_degrees(),
                           temp);
@@ -494,6 +490,12 @@ TEST(ParabolicTrough, UpdateGeometry_TrackingLimits)
     const double UPPER = 10.0;
 
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
+
+    SimulationData sd;
+    auto optics = OpticalPropertySet();
+    auto optics_ref = sd.add_optical_property_set(optics);
+    pt->set_optics(optics_ref, optics_ref, optics_ref, optics_ref);
+
     pt->set_origin(0.0, 0.0, 0.0);
     pt->set_angles(0.0, 0.0);
     pt->set_tracking_limits(LOWER, UPPER);
@@ -519,12 +521,11 @@ TEST(ParabolicTrough, UpdateGeometry_TrackingLimits)
     //           << "\nZ-Rotation: " << pt->get_zrot()
     //           << std::endl;
     EXPECT_NEAR(pt->get_tracking_angle_degrees(), UPPER, TOL);
-    Vector3d normal = pt->get_aim_vector_global();
-    normal.make_unit();
+    glm::dvec3 normal = glm::normalize(pt->get_aim_vector_global());
     EXPECT_NEAR(normal[0], cos(UPPER * D2R), TOL);
     EXPECT_NEAR(normal[1], 0.0, TOL);
     EXPECT_NEAR(normal[2], sin(UPPER * D2R), TOL);
-    Vector3d upper = pt->get_tracking_limit_upper();
+    glm::dvec3 upper = pt->get_tracking_limit_upper();
     for (unsigned k = 0; k < 3; ++k)
     {
         EXPECT_NEAR(normal[k], upper[k], TOL);
@@ -532,12 +533,11 @@ TEST(ParabolicTrough, UpdateGeometry_TrackingLimits)
 
     pt->update_geometry(-sun_az, sun_el);
     EXPECT_NEAR(pt->get_tracking_angle_degrees(), LOWER, TOL);
-    normal = pt->get_aim_vector_global();
-    normal.make_unit();
+    normal = glm::normalize(pt->get_aim_vector_global());
     EXPECT_NEAR(normal[0], cos(LOWER * D2R), TOL);
     EXPECT_NEAR(normal[1], 0.0, TOL);
     EXPECT_NEAR(normal[2], sin(LOWER * D2R), TOL);
-    Vector3d lower = pt->get_tracking_limit_lower();
+    glm::dvec3 lower = pt->get_tracking_limit_lower();
     for (unsigned k = 0; k < 3; ++k)
     {
         EXPECT_NEAR(normal[k], lower[k], TOL);
@@ -547,6 +547,12 @@ TEST(ParabolicTrough, UpdateGeometry_TrackingLimits)
 TEST(ParabolicTrough, ErrorChecking_UpdateGeometry)
 {
     auto pt = SolTrace::Data::make_element<ParabolicTrough>();
+
+    SimulationData sd;
+    auto optics = OpticalPropertySet();
+    auto optics_ref = sd.add_optical_property_set(optics);
+    pt->set_optics(optics_ref, optics_ref, optics_ref, optics_ref);
+
     pt->set_origin(10.0, 0.0, 0.0);
     pt->set_angles(30.0, 10.0);
     pt->set_tracking_limits(-90.0, 90.0);

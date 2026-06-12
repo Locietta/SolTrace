@@ -32,7 +32,7 @@ ParabolicDish::ParabolicDish() : CompositeElement(),
                                  tracking_azimuth(90.0)
 {
     // Default position is pointing straight up and facing the east
-    this->elevation_axis.set_values(1.0, 0.0, 0.0);
+    this->elevation_axis = {1.0, 0.0, 0.0};
     sun_position_vector_degrees(this->sun_position,
                                 this->tracking_azimuth,
                                 this->tracking_elevation);
@@ -87,8 +87,8 @@ void ParabolicDish::create_geometry()
     }
 
     single_element_ptr mirror;
-    Vector3d origin(0.0, 0.0, 0.0);
-    Vector3d aim(0.0, 0.0, 1000.0);
+    glm::dvec3 origin(0.0, 0.0, 0.0);
+    glm::dvec3 aim(0.0, 0.0, 1000.0);
     double zrot = 0.0;
 
     if (this->gap_center <= 0.0 &&
@@ -100,8 +100,7 @@ void ParabolicDish::create_geometry()
         mirror->set_aperture(make_aperture<Circle>(this->aperture_diameter));
         mirror->set_surface(make_surface<Parabola>(this->focal_length,
                                                    this->focal_length));
-        mirror->set_front_optical_properties(this->optics_mirror);
-        mirror->set_back_optical_properties(this->optics_mirror);
+        mirror->set_optical_property_set(optics_mirror);
         mirror->enable();
 
         this->mirrors.push_back(mirror);
@@ -126,8 +125,7 @@ void ParabolicDish::create_geometry()
                                                             panel_angle));
                 mirror->set_surface(make_surface<Parabola>(this->focal_length,
                                                            this->focal_length));
-                mirror->set_front_optical_properties(this->optics_mirror);
-                mirror->set_back_optical_properties(this->optics_mirror);
+                mirror->set_optical_property_set(optics_mirror);
                 mirror->set_name("ParabolicMirror");
                 mirror->enable();
 
@@ -142,13 +140,12 @@ void ParabolicDish::create_geometry()
 
     /**** Create absorber element(s) ****/
     single_element_ptr abs = make_element<SingleElement>();
-    origin.set_values(0.0, 0.0, this->abs_distance);
-    aim.set_values(0.0, 0.0, this->abs_distance - 1.0);
+    origin = {0.0, 0.0, this->abs_distance};
+    aim = {0.0, 0.0, this->abs_distance - 1.0};
     abs->set_reference_frame_geometry(origin, aim, 0.0);
     abs->set_aperture(make_aperture<Circle>(this->abs_diameter));
     abs->set_surface(make_surface<Flat>());
-    abs->set_front_optical_properties(this->optics_absorber);
-    abs->set_back_optical_properties(this->optics_absorber);
+    abs->set_optical_property_set(optics_absorber);
     abs->set_name("Absorber");
     abs->enable();
 
@@ -196,15 +193,15 @@ void ParabolicDish::update_geometry(double azimuth, double elevation)
     this->tracking_elevation = elevation;
 
     sun_position_vector_degrees(this->sun_position, azimuth, elevation);
-    this->sun_position.scalar_mult(1000.0);
+    this->sun_position *= 1000.0;
     this->convert_global_to_reference(this->aim, this->sun_position);
 
-    Vector3d aim_proj;
+    glm::dvec3 aim_proj;
     // Get aim direction (not point)
-    vector_add(-1.0, this->origin, 1.0, this->aim, aim_proj);
+    aim_proj = -1.0 * this->origin + this->aim;
     // Project into reference xy-plane
     aim_proj[2] = 0.0;
-    double theta = acos(aim_proj[0] / vector_norm(aim_proj));
+    double theta = acos(aim_proj[0] / glm::length(aim_proj));
     this->set_zrot_radians(theta);
 
     this->compute_coordinate_rotations();
@@ -301,8 +298,8 @@ void ParabolicDish::set_number_of_panels(int_fast64_t nradial,
     return;
 }
 
-void ParabolicDish::set_optics(const OpticalProperties &mirror,
-                               const OpticalProperties &absorber)
+void ParabolicDish::set_optics(const OpticalPropertySetReference &mirror,
+                               const OpticalPropertySetReference &absorber)
 {
     this->optics_mirror = mirror;
     this->optics_absorber = absorber;

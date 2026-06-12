@@ -65,6 +65,7 @@
 #include <simulation_runner.hpp>
 
 // NativeRunner headers
+#include "determine_interaction_type.hpp"
 #include "find_element_hit.hpp"
 #include "generate_ray.hpp"
 #include "native_runner_types.hpp"
@@ -72,20 +73,21 @@
 #include "pt_optimizations.hpp"
 #include "sun_to_primary_stage.hpp"
 #include "thread_manager.hpp"
+#include "trace_logger.hpp"
 #include "treemesh.hpp"
 
 namespace SolTrace::NativeRunner
 {
-
 	using SolTrace::Result::RayEvent;
 	using SolTrace::Runner::RunnerStatus;
 
 	// Trace method
 	RunnerStatus trace_native(
 		thread_manager_ptr manager,
+		trace_logger_ptr logger,
 		TSystem *System,
 		const std::vector<unsigned int> &seeds,
-		uint_fast64_t nthreads,
+		unsigned nthreads,
 		uint_fast64_t NumberOfRays,
 		uint_fast64_t MaxNumberOfRays,
 		bool IncludeSunShape,
@@ -93,12 +95,12 @@ namespace SolTrace::NativeRunner
 		bool AsPowerTower)
 	{
 		// Initialize Sun
-		Vector3d PosSunStage;
-		if (!SunToPrimaryStage(manager,
+		glm::dvec3 PosSunStage;
+		if (!SunToPrimaryStage(logger,
 							   System,
 							   System->StageList[0].get(),
 							   &System->Sun,
-							   PosSunStage.data))
+							   PosSunStage))
 			return RunnerStatus::ERROR;
 
 		// Determine if PT optimizations should be applied
@@ -112,18 +114,18 @@ namespace SolTrace::NativeRunner
 		// Calculate hash tree for reflection to receiver plane(polar coordinates).
 		st_hash_tree sun_hash;
 		st_hash_tree rec_hash;
-		// double reccm_helio[3]; // receiver centroid in heliostat field coordinates
-		Vector3d reccm_helio;
+		glm::dvec3 reccm_helio(0.0,0.0,0.0);
 		if (!PT_override)
 		{
 			SetupPTOptimizations(System, AsPowerTower, sun_hash,
-								 rec_hash, reccm_helio.data);
+								 rec_hash, reccm_helio);
 		}
 
 		// Bundle many args into a struct because the compiler was
 		// having trouble with all the arguments...
 		ThreadInfo my_info;
 		my_info.manager = manager;
+		my_info.logger = logger;
 		my_info.System = System;
 		// my_info.NumberOfRays = NumberOfRays / nthreads;
 		uint_fast64_t rem = NumberOfRays % nthreads;
@@ -146,6 +148,7 @@ namespace SolTrace::NativeRunner
 			my_info.NumberOfRays = (k < rem
 										? nrays_per_thread + 1
 										: nrays_per_thread);
+			my_info.ray_index_offset = k * nrays_per_thread + std::min(static_cast<uint_fast64_t>(k), rem);
 
 			ThreadManager::future my_future = std::async(
 				std::launch::async,
@@ -163,17 +166,19 @@ namespace SolTrace::NativeRunner
 	RunnerStatus trace_single_thread(
 		unsigned thread_id,
 		thread_manager_ptr manager,
+		trace_logger_ptr logger,
 		TSystem *System,
 		unsigned int seed,
 		uint_fast64_t NumberOfRays,
 		uint_fast64_t MaxNumberOfRays,
+		uint_fast64_t ray_index_offset,
 		bool IncludeSunShape,
 		bool IncludeErrors,
 		bool AsPowerTower,
-		const Vector3d &PosSunStage,
+		const glm::dvec3 &PosSunStage,
 		st_hash_tree *sun_hash,
 		st_hash_tree *rec_hash,
-		const Vector3d &reccm_helio)
+		const glm::dvec3 &reccm_helio)
 	{
 		// Initialize variables
 		MTRand myrng(seed);
@@ -208,11 +213,6 @@ namespace SolTrace::NativeRunner
 		std::vector<GlobalRay_refactored> IncomingRays; // Vector of rays from previous stage, going into next stage
 		IncomingRays.resize(NumberOfRays);
 
-		// Start the clock
-		// clock_t startTime = clock();
-		// int rays_per_callback_estimate = 50;
-		// uint_fast64_t RaysTracedTotal = 0;
-
 		// Initialize stage variables
 		uint_fast64_t StageDataArrayIndex = 0;
 		uint_fast64_t PreviousStageDataArrayIndex = 0;
@@ -241,28 +241,38 @@ namespace SolTrace::NativeRunner
 			while (StageHasRays)
 			{
 				// Initialize Global Coordinates
-				double PosRayGlob[3] = {0.0, 0.0, 0.0};
-				double CosRayGlob[3] = {0.0, 0.0, 0.0};
+				glm::dvec3 PosRayGlob = {0.0, 0.0, 0.0};
+            	glm::dvec3 CosRayGlob = {0.0, 0.0, 0.0};
 
 				// Initialize Stage Coordinates
-				double PosRayStage[3] = {0.0, 0.0, 0.0};
-				double CosRayStage[3] = {0.0, 0.0, 0.0};
+				glm::dvec3 PosRayStage = {0.0, 0.0, 0.0};
+            	glm::dvec3 CosRayStage = {0.0, 0.0, 0.0};
 
 				// Initialize PT Optimization variables
 				bool has_elements = true;
 				std::vector<void *> sunint_elements;
+				int ErrorFlag = 0;
 
 				// Get Ray
 				if (i == 0)
 				{
 					// TODO: This function seems to ignore the MaxNumberOfRays
 					// argument. Should fix that.
+					const uint_fast64_t sample_index = ray_index_offset + sun_ray_count_local + 1;
 
 					// Make ray (if first stage)
-					double PosRaySun[3];
-					GenerateRay(myrng, PosSunStage.data, Stage->Origin,
+					glm::dvec3 PosRaySun;
+					GenerateRay(myrng, PosSunStage, Stage->Origin,
 								Stage->RLocToRef, &System->Sun,
-								PosRayGlob, CosRayGlob, PosRaySun);
+								sample_index,
+								PosRayGlob, CosRayGlob, PosRaySun,
+								ErrorFlag);
+
+					if (ErrorFlag != 0)
+					{
+						return RunnerStatus::ERROR;
+					}
+
 					sun_ray_count_local++;
 
 					// If using PT optimizations, check if stage has elements
@@ -279,8 +289,8 @@ namespace SolTrace::NativeRunner
 				{
 					// Get ray from previous stage
 					RayNumber = IncomingRays[StageDataArrayIndex].Num;
-					CopyVec3(PosRayGlob, IncomingRays[StageDataArrayIndex].Pos);
-					CopyVec3(CosRayGlob, IncomingRays[StageDataArrayIndex].Cos);
+					PosRayGlob = IncomingRays[StageDataArrayIndex].Pos;
+					CosRayGlob = IncomingRays[StageDataArrayIndex].Cos;
 					StageDataArrayIndex++;
 				}
 
@@ -292,19 +302,18 @@ namespace SolTrace::NativeRunner
 				// Initialize internal variables for ray intersection tracing
 				bool RayInStage = true;
 				bool in_multi_hit_loop = false;
-				double LastPosRaySurfElement[3] = {0.0, 0.0, 0.0};
-				double LastCosRaySurfElement[3] = {0.0, 0.0, 0.0};
-				double LastPosRaySurfStage[3] = {0.0, 0.0, 0.0};
-				double LastCosRaySurfStage[3] = {0.0, 0.0, 0.0};
-				double LastDFXYZ[3] = {0.0, 0.0, 0.0};
+				glm::dvec3 LastPosRaySurfElement = {0.0, 0.0, 0.0};
+				glm::dvec3 LastCosRaySurfElement = {0.0, 0.0, 0.0};
+				glm::dvec3 LastPosRaySurfStage = {0.0, 0.0, 0.0};
+				glm::dvec3 LastCosRaySurfStage = {0.0, 0.0, 0.0};
+				glm::dvec3 LastDFXYZ = {0.0, 0.0, 0.0};
 				uint_fast64_t LastElementNumber = 0;
 				uint_fast64_t LastRayNumber = 0;
-				int ErrorFlag;
-				int LastHitBackSide;
-				bool StageHit;
+				int LastHitBackSide = 0;
+				bool StageHit = false;
 				int MultipleHitCount = 0;
-				double PosRayOutElement[3] = {0.0, 0.0, 0.0};
-				double CosRayOutElement[3] = {0.0, 0.0, 0.0};
+				glm::dvec3 PosRayOutElement = {0.0, 0.0, 0.0};
+				glm::dvec3 CosRayOutElement = {0.0, 0.0, 0.0};
 
 				// Start Loop to trace ray until it leaves stage
 				bool RayIsAbsorbed = false;
@@ -316,10 +325,10 @@ namespace SolTrace::NativeRunner
 					if (!PT_override) // if using opt AND first stage
 					{
 						nintelements = GetPTElements(AsPowerTower, Stage, i,
-													 in_multi_hit_loop, PosRayStage,
-													 reccm_helio.data, rec_hash,
-													 sunint_elements,
-													 reflint_elements, has_elements);
+                                                 in_multi_hit_loop, PosRayStage,
+                                                 reccm_helio, rec_hash,
+                                                 sunint_elements,
+                                                 reflint_elements, has_elements);
 					}
 					else
 					{
@@ -363,114 +372,45 @@ namespace SolTrace::NativeRunner
 							std::stringstream ss;
 							ss << "Thread " << thread_id
 							   << " failed to record ray data.\n";
-							manager->error_log(ss.str());
+							logger->error_log(ss.str());
 						}
 					}
 
 					// Get optics and check for absorption
-					const OpticalProperties *optics = 0;
+					const OpticalPropertySet *optics_set = 0;
 					RayEvent rev = RayEvent::VIRTUAL;
 					if (Stage->Virtual)
 					{
 						// If stage is virtual, there is no interaction
-						CopyVec3(PosRayOutElement, LastPosRaySurfElement);
-						CopyVec3(CosRayOutElement, LastCosRaySurfElement);
+						PosRayOutElement = LastPosRaySurfElement;
+						CosRayOutElement = LastCosRaySurfElement;
 					}
 					else
 					{
 						// trace through the interaction
-						telement_ptr optelm = Stage->ElementList[LastElementNumber - 1];
+						telement_ptr optelm =
+							Stage->ElementList[LastElementNumber - 1];
 
-						if (LastHitBackSide)
-							optics = &optelm->Optics.Back;
-						else
-							optics = &optelm->Optics.Front;
+						optics_set = &optelm->Optics;
 
-						double TestValue;
-						double UnitLastDFXYZ[3] = {0.0, 0.0, 0.0};
-						double IncidentAngle = 0;
-						// switch (optelm->InteractionType)
-						switch (optics->my_type)
+						bool good = determine_interaction_type(
+							logger,
+							i,
+							0,
+							myrng,
+							optics_set,
+							LastDFXYZ,
+							LastCosRaySurfElement,
+							LastHitBackSide,
+							rev);
+
+						if (!good)
 						{
-						case InteractionType::REFRACTION: // refraction
-							// TODO: Implement transmissivity table?
-							// if (optics->UseTransmissivityTable)
-							// {
-							// 	int npoints = optics->TransmissivityTable.size();
-							// 	int m = 0;
-
-							// 	UnitLastDFXYZ[0] = -LastDFXYZ[0] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	UnitLastDFXYZ[1] = -LastDFXYZ[1] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	UnitLastDFXYZ[2] = -LastDFXYZ[2] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	IncidentAngle = acos(DOT(LastCosRaySurfElement, UnitLastDFXYZ)) * 1000.; //[mrad]
-							// 	if (IncidentAngle >= optics->TransmissivityTable[npoints - 1].angle)
-							// 	{
-							// 		TestValue = optics->TransmissivityTable[npoints - 1].trans;
-							// 	}
-							// 	else
-							// 	{
-							// 		while (optics->TransmissivityTable[m].angle < IncidentAngle)
-							// 			m++;
-
-							// 		if (m == 0)
-							// 			TestValue = optics->TransmissivityTable[m].trans;
-							// 		else
-							// 			TestValue = (optics->TransmissivityTable[m].trans + optics->TransmissivityTable[m - 1].trans) / 2.0;
-							// 	}
-							// }
-							// else
-							// 	TestValue = optics->Transmissivity;
-							TestValue = optics->transmitivity;
-							rev = RayEvent::TRANSMIT;
-							break;
-						case InteractionType::REFLECTION: // reflection
-							// TODO: Implement reflectivity table?
-							// if (optics->UseReflectivityTable)
-							// {
-							// 	int npoints = optics->ReflectivityTable.size();
-							// 	int m = 0;
-							// 	UnitLastDFXYZ[0] = -LastDFXYZ[0] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	UnitLastDFXYZ[1] = -LastDFXYZ[1] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	UnitLastDFXYZ[2] = -LastDFXYZ[2] / sqrt(DOT(LastDFXYZ, LastDFXYZ));
-							// 	IncidentAngle = acos(DOT(LastCosRaySurfElement, UnitLastDFXYZ)) * 1000.; //[mrad]
-							// 	if (IncidentAngle >= optics->ReflectivityTable[npoints - 1].angle)
-							// 	{
-							// 		TestValue = optics->ReflectivityTable[npoints - 1].refl;
-							// 	}
-							// 	else
-							// 	{
-							// 		while (optics->ReflectivityTable[m].angle < IncidentAngle)
-							// 			m++;
-
-							// 		if (m == 0)
-							// 			TestValue = optics->ReflectivityTable[m].refl;
-							// 		else
-							// 			TestValue = (optics->ReflectivityTable[m].refl + optics->ReflectivityTable[m - 1].refl) / 2.0;
-							// 	}
-							// }
-							// else
-							// 	TestValue = optics->Reflectivity;
-							TestValue = optics->reflectivity;
-							rev = RayEvent::REFLECT;
-							break;
-						default:
-							std::stringstream ss;
-							ss << "Bad optical interaction."
-							   << " Type: " << static_cast<int>(optics->my_type)
-							   << " Stage: " << i
-							   << " Thread: " << thread_id
-							   << "\n";
-							manager->error_log(ss.str());
 							return RunnerStatus::ERROR;
 						}
 
-						// Apply MonteCarlo probability of absorption. Limited
-						// for now, but can make more complex later on if desired
-						// if (TestValue <= myrng())
-						double flip = myrng();
-						if (TestValue <= flip)
+						if (rev == RayEvent::ABSORB)
 						{
-							// ray was fully absorbed
 							RayIsAbsorbed = true;
 							break;
 						}
@@ -481,9 +421,11 @@ namespace SolTrace::NativeRunner
 					ProcessInteraction(System,
 									   myrng,
 									   IncludeSunShape,
-									   optics,
+									   optics_set,
+									   LastHitBackSide,
 									   IncludeErrors,
-									   i, Stage, // k,
+									   i,
+									   Stage,
 									   MultipleHitCount,
 									   LastDFXYZ,
 									   LastCosRaySurfElement,
@@ -526,7 +468,9 @@ namespace SolTrace::NativeRunner
 					}
 				}
 
-				++update_count;
+				if (MultipleHitCount > 0)
+					++update_count;
+
 				if (update_count % update_rate == 0)
 				{
 					double progress = update_count / total_work;
@@ -594,10 +538,8 @@ namespace SolTrace::NativeRunner
 					else
 					{
 						// Ray hit an element, so save it for next stage
-						CopyVec3(IncomingRays[PreviousStageDataArrayIndex].Pos,
-								 PosRayGlob);
-						CopyVec3(IncomingRays[PreviousStageDataArrayIndex].Cos,
-								 CosRayGlob);
+						IncomingRays[PreviousStageDataArrayIndex].Pos = PosRayGlob;
+						IncomingRays[PreviousStageDataArrayIndex].Cos = CosRayGlob;
 						IncomingRays[PreviousStageDataArrayIndex].Num = RayNumber;
 
 						// Is Ray the last in the stage?
@@ -622,10 +564,8 @@ namespace SolTrace::NativeRunner
 					if (Stage->TraceThrough || MultipleHitCount > 0)
 					{
 						// Ray is saved for the next stage
-						CopyVec3(IncomingRays[PreviousStageDataArrayIndex].Pos,
-								 PosRayGlob);
-						CopyVec3(IncomingRays[PreviousStageDataArrayIndex].Cos,
-								 CosRayGlob);
+						IncomingRays[PreviousStageDataArrayIndex].Pos = PosRayGlob;
+						IncomingRays[PreviousStageDataArrayIndex].Cos = CosRayGlob;
 						IncomingRays[PreviousStageDataArrayIndex].Num = RayNumber;
 
 						// Check if ray is last in stage

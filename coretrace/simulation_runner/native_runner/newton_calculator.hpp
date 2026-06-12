@@ -19,19 +19,19 @@ namespace SolTrace::NativeRunner
                          uint_fast64_t max_iters = 20);
         virtual ~NewtonCalculator() {}
 
-        virtual int intersect(const double PosLoc[3],
-                              const double CosLoc[3],
-                              double PosXYZ[3],
-                              double CosKLM[3],
-                              double DFXYZ[3],
-                              double *PathLength);
+        virtual int intersect(const glm::dvec3 PosLoc,
+                              const glm::dvec3 CosLoc,
+                              glm::dvec3 &PosXYZ,
+                              glm::dvec3 &CosKLM,
+                              glm::dvec3 &DFXYZ,
+                              double *PathLength) override;
 
         // For x = PosXYZ[0], y = PosXYZ[1], make a guess at
         // value of z and place in PosXYZ[2].
-        virtual void set_zstart(double PosXYZ[3]) = 0;
-        virtual void surface_and_jacobian(const double PosXYZ[3],
+        virtual void set_zstart(glm::dvec3 &PosXYZ) = 0;
+        virtual void surface_and_jacobian(glm::dvec3 PosXYZ,
                                           double *F,
-                                          double DFXYZ[3]) = 0;
+                                          glm::dvec3 &DFXYZ) = 0;
 
         inline double get_tolerance() const
         {

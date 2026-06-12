@@ -6,7 +6,6 @@
 #include <parabola_calculator.hpp>
 #include <simulation_data_export.hpp>
 #include <surface.hpp>
-#include <vector3d.hpp>
 
 using SolTrace::NativeRunner::ParabolaCalculator;
 
@@ -94,24 +93,22 @@ TEST(ParabolaCalculator, ConstructorValidFocalLength)
 TEST(ParabolaCalculator, Case1)
 {
     // Case: a == 0, t <= 0 -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray location
-    Vector3d x0(0.0, 0.0, 1.0);
+    glm::dvec3 x0(0.0, 0.0, 1.0);
     // Ray direction
-    Vector3d m(0.0, 0.0, 1.0);
+    glm::dvec3 m(0.0, 0.0, 1.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(0.5, 0.25);
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -124,9 +121,9 @@ TEST(ParabolaCalculator, Case2)
     // Case: a == 0, t > 0 -- returns t
     // NOTE: Here the quadratic equation reduces to a linear equation
     // Ray location
-    Vector3d x0(0.0, 0.0, -1.0);
+    glm::dvec3 x0(0.0, 0.0, -1.0);
     // Ray direction
-    Vector3d m(0.0, 0.0, 1.0);
+    glm::dvec3 m(0.0, 0.0, 1.0);
     // Intersection point
     const double T = 1.0;
     const double TOL = 1e-12;
@@ -136,15 +133,14 @@ TEST(ParabolaCalculator, Case2)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(0.5, 0.25);
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
     EXPECT_NEAR(xt[0], 0.0, TOL);
@@ -160,24 +156,22 @@ TEST(ParabolaCalculator, Case2)
 TEST(ParabolaCalculator, Case3)
 {
     // Case: a != 0, Delta = b^2 - 4ac < 0 -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray location
-    Vector3d x0(-2.0, 1.0, 0.0);
+    glm::dvec3 x0(-2.0, 1.0, 0.0);
     // Ray direction
-    Vector3d m(1.0, 1.0, 1.0);
+    glm::dvec3 m(1.0, 1.0, 1.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(0.5, 0.25);
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -189,9 +183,9 @@ TEST(ParabolaCalculator, Case4)
 {
     // Case: a != 0, Delta >= 0, t1 > 0 -- returns t1
     // Ray location
-    Vector3d x0(-2.0, 1.0, 0.0);
+    glm::dvec3 x0(-2.0, 1.0, 0.0);
     // Ray direction
-    Vector3d m(2.0, 0.5, 3.0);
+    glm::dvec3 m(2.0, 0.5, 3.0);
     // Intersection point
     const double T = 2.0 / 3.0;
     const double TOL = 1e-12;
@@ -201,16 +195,15 @@ TEST(ParabolaCalculator, Case4)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(focal_length(cx),
                                                            focal_length(cy));
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
     EXPECT_NEAR(xt[0], m[0] * T + x0[0], TOL);
@@ -227,9 +220,9 @@ TEST(ParabolaCalculator, Case5)
 {
     // Case: a != 0, Delta >= 0, t1 < 0, t2 > 0 -- returns t2
     // Ray location
-    Vector3d x0(1.0, -1.0, 3.0);
+    glm::dvec3 x0(1.0, -1.0, 3.0);
     // Ray direction
-    Vector3d m(1.0, 0.0, 2.0);
+    glm::dvec3 m(1.0, 0.0, 2.0);
     // Intersection point
     const double T = 3.0;
     const double TOL = 1e-12;
@@ -239,16 +232,15 @@ TEST(ParabolaCalculator, Case5)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(focal_length(cx),
                                                            focal_length(cy));
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
     EXPECT_NEAR(xt[0], m[0] * T + x0[0], TOL);
@@ -264,12 +256,11 @@ TEST(ParabolaCalculator, Case5)
 TEST(ParabolaCalculator, Case6)
 {
     // Case: a != 0, Delta >= 0, t1 < 0, t2 < 0 -- returns no solution
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
     // Ray location
-    Vector3d x0(3.0, 1.0, 2.0);
+    glm::dvec3 x0(3.0, 1.0, 2.0);
     // Ray direction
-    Vector3d m(1.0, -1.0, -4.0);
+    glm::dvec3 m(1.0, -1.0, -4.0);
     // Intersection point
     const double T = 1.0 + sqrt(8.0);
     const double TOL = 1e-12;
@@ -279,16 +270,15 @@ TEST(ParabolaCalculator, Case6)
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
     auto parabola = SolTrace::Data::make_surface<Parabola>(focal_length(cx),
                                                            focal_length(cy));
     auto circ = create_circle_aperture(10.0);
     ParabolaCalculator pcalc(parabola, circ);
-    int sts = pcalc.intersect(x0.data, m.data,
-                              xt.data, mt.data, gradf.data, &t);
+    int sts = pcalc.intersect(x0, m, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));

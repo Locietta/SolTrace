@@ -36,11 +36,11 @@ namespace SolTrace::NativeRunner
 
     FlatCalculator::~FlatCalculator() {}
 
-    int FlatCalculator::intersect(const double PosLoc[3],
-                                  const double CosLoc[3],
-                                  double PosXYZ[3],
-                                  double CosKLM[3],
-                                  double DFXYZ[3],
+    int FlatCalculator::intersect(const glm::dvec3 PosLoc,
+                                  const glm::dvec3 CosLoc,
+                                  glm::dvec3 &PosXYZ,
+                                  glm::dvec3 &CosKLM,
+                                  glm::dvec3 &DFXYZ,
                                   double *PathLength)
     {
         int sts = 0;
@@ -54,9 +54,9 @@ namespace SolTrace::NativeRunner
         double mz = CosLoc[2];
         double t;
 
-        ZeroVec3(PosXYZ);
-        ZeroVec3(DFXYZ);
-        ZeroVec3(CosKLM);
+        PosXYZ = {};
+        CosKLM = {};
+        DFXYZ = {};
 
         if (fabs(mz) < 1e-12)
         {
@@ -73,7 +73,7 @@ namespace SolTrace::NativeRunner
 
             if (t > 0.0 && this->aper->is_in(x0, y0))
             {
-                CopyVec3(CosKLM, CosLoc);
+                CosKLM = CosLoc;
 
                 PosXYZ[0] = x0;
                 PosXYZ[1] = y0;

@@ -13,16 +13,21 @@
 
 #include <limits>
 #include <map>
+#include <string>
+#include <utility>
+
+#include <glm/vec3.hpp>
 
 #include "container.hpp"
 #include "datetime.hpp"
-#include "vector3d.hpp"
+
 
 namespace SolTrace::Data {
 
 // Add new enums to SunShapeMap too
 enum class SunShape
 {
+    NONE,
     GAUSSIAN,
     PILLBOX,
     LIMBDARKENED,
@@ -33,6 +38,7 @@ enum class SunShape
 
 inline const std::map<SunShape, std::string> SunShapeMap =
 {
+    {SunShape::NONE, "NONE"},
     {SunShape::GAUSSIAN, "GAUSSIAN"},
     {SunShape::PILLBOX, "PILLBOX"},
     {SunShape::LIMBDARKENED, "LIMBDARKENED"},
@@ -41,15 +47,29 @@ inline const std::map<SunShape, std::string> SunShapeMap =
     {SunShape::UNKNOWN, "UNKNOWN"}
 };
 
+enum class GenType
+{
+    RANDOM,
+    HALTON,
+    UNKNOWN
+};
+
+inline const std::map<GenType, std::string> GenTypeMap =
+{
+    {GenType::RANDOM, "RANDOM"},
+    {GenType::HALTON, "HALTON"},
+    {GenType::UNKNOWN, "UNKNOWN"}
+};
+
 class RaySource
 {
 public:
     RaySource() {}
     virtual ~RaySource() {}
 
-    virtual const Vector3d &get_position() const = 0;
-    virtual Vector3d &get_position() = 0;
-    virtual void set_position(const Vector3d &) = 0;
+    virtual const glm::dvec3 &get_position() const = 0;
+    virtual glm::dvec3 &get_position() = 0;
+    virtual void set_position(const glm::dvec3 &) = 0;
     virtual void set_position(double, double, double) = 0;
     virtual void set_position(const DateTime &, double lat, double long) = 0;
     virtual SunShape get_shape() const = 0;
@@ -75,11 +95,15 @@ public:
         return;
     }
     virtual void calculate_buie_parameters(double& kappa, double& gamma) = 0;
+    virtual double get_max_sun_angle(double gaussian_coverage) const = 0;
+    virtual double get_max_intensity() const = 0;
+    virtual void set_gen_type(GenType) = 0;
+    virtual GenType get_gen_type() const = 0;
 
 protected:
-    double sigma = std::numeric_limits<double>::quiet_NaN();
-    double half_width = std::numeric_limits<double>::quiet_NaN();
-    double circumsolar_ratio = std::numeric_limits<double>::quiet_NaN();
+    double sigma = std::numeric_limits<double>::quiet_NaN();            // [mrad]
+    double half_width = std::numeric_limits<double>::quiet_NaN();       // [mrad]
+    double circumsolar_ratio = std::numeric_limits<double>::quiet_NaN();// [mrad]
     std::vector<double> user_angle;
     std::vector<double> user_intensity;
 };

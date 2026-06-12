@@ -5,6 +5,7 @@
 #include <exception>
 #include <map>
 #include <mutex>
+#include <sstream>
 #include <thread>
 
 // SimulationData headers
@@ -17,6 +18,7 @@
 // NativeRunner headers
 #include "native_runner_types.hpp"
 #include "trace.hpp"
+#include "trace_logger.hpp"
 
 namespace SolTrace::NativeRunner
 {
@@ -25,11 +27,16 @@ namespace SolTrace::NativeRunner
                                    as_power_tower(false),
                                    number_of_threads(1)
     {
-        this->my_manager = make_thread_manager();
+        this->my_logger = make_trace_logger();
+        this->my_manager = make_thread_manager(this->my_logger);
+        return;
     }
 
     NativeRunner::~NativeRunner()
     {
+        this->my_manager = nullptr;
+        this->my_logger = nullptr;
+        return;
     }
 
     RunnerStatus NativeRunner::initialize()
@@ -79,8 +86,9 @@ namespace SolTrace::NativeRunner
         }
 
         ray_source_ptr sun = data->get_ray_source();
-        vector_copy(this->tsys.Sun.Origin, sun->get_position());
+        this->tsys.Sun.Origin = sun->get_position();
         this->tsys.Sun.ShapeIndex = sun->get_shape();
+        this->tsys.Sun.GenTypeIndex = sun->get_gen_type();
 
         // Set sunshape data
         switch (sun->get_shape())
@@ -155,7 +163,7 @@ namespace SolTrace::NativeRunner
         auto my_map = std::map<int_fast64_t, tstage_ptr>();
         // int_fast64_t current_stage_id = -1;
         tstage_ptr current_stage = nullptr;
-        int_fast64_t element_number = 1;
+        // int_fast64_t element_number = 1;
         bool element_found_before_stage = false;
 
         if (data->get_number_of_elements() <= 0)
@@ -163,52 +171,57 @@ namespace SolTrace::NativeRunner
             throw std::invalid_argument("SimulationData has no elements.");
         }
 
-        for (auto iter = data->get_const_iterator();
-             !data->is_at_end(iter);
-             ++iter)
+        if (use_stages)
         {
-            element_ptr el = iter->second;
-            if (el->is_enabled() && el->is_stage())
+            for (auto iter = data->get_const_iterator();
+                 !data->is_at_end(iter);
+                 ++iter)
             {
-                tstage_ptr stage = make_tstage(el, this->eparams);
-                auto retval = my_map.insert(
-                    std::make_pair(el->get_stage(), stage));
-
-                // current_stage_id = stage->stage_id;
-
-                // std::cout << "Created stage " << el->get_stage()
-                //           << " with " << stage->ElementList.size() << " elements"
-                //           << std::endl;
-
-                if (retval.second == false)
+                element_ptr el = iter->second;
+                if (el->is_enabled() && el->is_stage())
                 {
-                    // TODO: Duplicate stage numbers. Need to make an error
-                    // message.
-                    sts = RunnerStatus::ERROR;
-                }
+                    tstage_ptr stage = make_tstage(el, this->eparams);
+                    auto retval = my_map.insert(
+                        std::make_pair(el->get_stage(), stage));
 
-                current_stage = stage;
-                element_number = 1;
-            }
-            else if (el->is_enabled() && el->is_single())
-            {
-                if (current_stage == nullptr)
-                {
-                    // throw std::runtime_error("No stage to add element to");
-                    element_found_before_stage = true;
-                    continue;
-                }
-                else if (el->get_stage() != current_stage->stage_id)
-                {
-                    throw std::runtime_error(
-                        "Element does not match current stage");
-                }
+                    // current_stage_id = stage->stage_id;
 
-                telement_ptr elem = make_telement(iter->second,
-                                                  element_number,
-                                                  this->eparams);
-                ++element_number;
-                current_stage->ElementList.push_back(elem);
+                    // std::cout << "Created stage " << el->get_stage()
+                    //           << " with " << stage->ElementList.size() << " elements"
+                    //           << std::endl;
+
+                    if (retval.second == false)
+                    {
+                        throw std::runtime_error("Duplicate stage numbers found.");
+                    }
+
+                    current_stage = stage;
+                    // element_number = 1;
+                }
+                else if (el->is_enabled() && el->is_single())
+                {
+                    if (current_stage == nullptr)
+                    {
+                        element_found_before_stage = true;
+                        continue;
+                    }
+                    else if (el->get_stage() != current_stage->stage_id)
+                    {
+                        throw std::runtime_error(
+                            "Element does not match current stage");
+                    }
+
+                    const auto optics = el->get_optical_property_set();
+                    if (optics == nullptr)
+                        throw std::runtime_error("Element has invalid optical property set.");
+                    telement_ptr elem = make_telement(iter->second,
+                                                      current_stage,
+                                                      this->eparams,
+                                                      *optics);
+                    // ++element_number;
+                    // current_stage->ElementList.push_back(elem);
+                    current_stage->add_element(elem);
+                }
             }
         }
 
@@ -225,7 +238,7 @@ namespace SolTrace::NativeRunner
             // set to correspond to global coordinates. This is necessary
             // so that the element coordinate setup in make_element are
             // correct.
-            int_fast64_t element_number = 1;
+            // int_fast64_t element_number = 1;
             auto stage = make_tstage(this->eparams);
             stage->ElementList.reserve(data->get_number_of_elements());
             for (auto iter = data->get_const_iterator();
@@ -235,11 +248,17 @@ namespace SolTrace::NativeRunner
                 element_ptr el = iter->second;
                 if (el->is_enabled() && el->is_single())
                 {
+                    const auto optics = el->get_optical_property_set();
+                    if (optics == nullptr)
+                        throw std::runtime_error("Element has invalid optical property set.");
                     telement_ptr tel = make_telement(el,
-                                                     element_number,
-                                                     this->eparams);
-                    stage->ElementList.push_back(tel);
-                    ++element_number;
+                                                     stage,
+                                                     this->eparams,
+                                                     *optics);
+                    // stage->ElementList.push_back(tel);
+                    // ++element_number;
+                    this->check_supported_options(tel);
+                    stage->add_element(tel);
                 }
             }
             my_map.insert(std::make_pair(0, stage));
@@ -274,28 +293,17 @@ namespace SolTrace::NativeRunner
     {
         // TODO: Do a more efficient implementation of this?
         this->tsys.ClearAll();
-        this->setup_simulation(data);
-        return RunnerStatus::SUCCESS;
+        return this->setup_simulation(data);
+        // return RunnerStatus::SUCCESS;
     }
 
     RunnerStatus NativeRunner::run_simulation()
     {
-        if (this->seeds.empty() ||
-            this->seeds.size() != this->number_of_threads)
-        {
-            this->seeds.clear();
-            for (unsigned k = 0; k < this->number_of_threads; ++k)
-            {
-                this->seeds.push_back(this->tsys.seed + 123 * k);
-            }
-        }
-        else
-        {
-            ; // Intentional no-op
-        }
+        this->set_seeds();
 
         RunnerStatus sts = trace_native(
             this->my_manager,
+            this->my_logger,
             &this->tsys,
             this->seeds,
             this->number_of_threads,
@@ -327,13 +335,13 @@ namespace SolTrace::NativeRunner
 
         const TSystem *sys = this->get_system();
         // const TRayData ray_data = sys->AllRayData;
-        const TRayData ray_data = sys->RayData;
+        const TRayData& ray_data = sys->RayData;
         std::map<unsigned int, SolTrace::Result::ray_record_ptr> ray_records;
         std::map<unsigned int, SolTrace::Result::ray_record_ptr>::iterator iter;
         uint_fast64_t ndata = ray_data.Count();
 
         bool sts;
-        Vector3d point, cosines;
+        glm::dvec3 point, cosines;
         int element;
         int stage;
         uint_fast64_t raynum;
@@ -349,8 +357,8 @@ namespace SolTrace::NativeRunner
         for (uint_fast64_t ii = 0; ii < ndata; ++ii)
         {
             sts = ray_data.Query(ii,
-                                 point.data,
-                                 cosines.data,
+                                 point,
+                                 cosines,
                                  &element,
                                  &stage,
                                  &raynum,
@@ -397,6 +405,15 @@ namespace SolTrace::NativeRunner
             intr = make_interaction_record(elid, rev, point, cosines);
             rec->add_interaction_record(intr);
         }
+
+        // Attach sun results
+        result->set_sun_ray_count(this->tsys.SunRayCount);
+
+        TSun &sun = this->tsys.Sun;
+        double sun_width = sun.MaxXSun - sun.MinXSun;
+        double sun_height = sun.MaxYSun - sun.MinYSun;
+        result->set_sun_dimensions(sun_width, sun_height);
+        result->set_sun_A_box(sun_width * sun_height);
 
         return retval;
     }
@@ -448,6 +465,57 @@ namespace SolTrace::NativeRunner
             Element->icalc->compute_z_aperture(Element->aperture);
 
         return true;
+    }
+
+    void NativeRunner::set_seeds()
+    {
+        if (this->seeds.empty() ||
+            this->seeds.size() != this->number_of_threads)
+        {
+            this->seeds.clear();
+            for (unsigned k = 0; k < this->number_of_threads; ++k)
+            {
+                this->seeds.push_back(this->tsys.seed + 123 * k);
+            }
+        }
+        else
+        {
+            ; // Intentional no-op
+        }
+        return;
+    }
+
+    void NativeRunner::check_supported_optical_distribution(DistributionType dt)
+    {
+        if (dt == DistributionType::NONE ||
+            dt == DistributionType::GAUSSIAN ||
+            dt == DistributionType::PILLBOX)
+
+            // Intentional no-op
+            ;
+
+        else
+        {
+            std::stringstream ss;
+            ss << "Unimplemented error distribution: "
+               << distribution_string(dt)
+               << std::endl;
+
+            throw std::invalid_argument(ss.str());
+        }
+        return;
+    }
+
+    void NativeRunner::check_supported_options(telement_ptr telem)
+    {
+        check_supported_optical_distribution(
+            telem->Optics.get_error_distribution(OpticalSide::Front));
+        check_supported_optical_distribution(
+            telem->Optics.get_error_distribution(OpticalSide::Back));
+
+        // TODO: Put other checks here
+
+        return;
     }
 
 } // namespace SolTrace::NativeRunner

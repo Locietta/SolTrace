@@ -19,9 +19,10 @@ namespace SolTrace::NativeRunner {
     //     - Reduce the random number calls. I.e., sample theta directly rather than thetax and thetay -> this will break tests because the number of RNG calls will change.
 
 void SurfaceNormalErrors(MTRand &myrng,
-						 double CosIn[3],
-						 const OpticalProperties *OptProperties,
-						 double CosOut[3]) noexcept(false) // throw(nanexcept)
+                         glm::dvec3 &CosIn,
+                         const SolTrace::Data::OpticalPropertySet* OptProperties,
+						 const bool LastHitBackSide,
+                         glm::dvec3 &CosOut) noexcept(false) // throw(nanexcept)
 {
 
 	/*{Purpose:  To add error terms to the surface normal vector at the surface in question
@@ -34,50 +35,45 @@ void SurfaceNormalErrors(MTRand &myrng,
 			   Output - CosOut  = Output direction cosine vector of surface normal after error terms have been included
 					   }*/
 
-	int i = 0;
-	double Origin[3] = {0.0, 0.0, 0.0},
-		   Euler[3] = {0.0, 0.0, 0.0};
-	double PosIn[3] = {0.0, 0.0, 0.0},
-		   PosOut[3] = {0.0, 0.0, 0.0};
-	DistributionType dist;
-	double delop = 0.0, thetax = 0.0,
-		   thetay = 0.0, theta2 = 0.0,
-		   phi = 0.0, theta = 0.0;
-	double RRefToLoc[3][3] = {{0.0, 0.0, 0.0},
-							  {0.0, 0.0, 0.0},
-							  {0.0, 0.0, 0.0}};
-	double RLocToRef[3][3] = {{0.0, 0.0, 0.0},
-							  {0.0, 0.0, 0.0},
-							  {0.0, 0.0, 0.0}};
+    int i = 0;
 
-	if (CosIn[2] == 0.0)
-	{
-		if (CosIn[0] == 0.0)
-		{
-			Euler[0] = 0.0;
-			Euler[1] = PI / 2.0;
-		}
-		else
-		{
-			Euler[0] = PI / 2.0;
-			Euler[1] = atan2(CosIn[1], sqrt(CosIn[0] * CosIn[0] + CosIn[2] * CosIn[2]));
-		}
-	}
-	else
-	{
-		Euler[0] = atan2(CosIn[0], CosIn[2]);
-		Euler[1] = atan2(CosIn[1], sqrt(CosIn[0] * CosIn[0] + CosIn[2] * CosIn[2]));
-	}
+	const OpticalSide side = LastHitBackSide == false ? OpticalSide::Front : OpticalSide::Back;
 
-	Euler[2] = 0.0;
+    glm::dvec3 Origin(0.0, 0.0, 0.0);
+    glm::dvec3 Euler(0.0, 0.0, 0.0);
 
-	CalculateTransformMatrices(Euler, RRefToLoc, RLocToRef);
+    glm::dvec3 PosIn(0.0, 0.0, 0.0);
+    glm::dvec3 PosOut(0.0, 0.0, 0.0);
 
-	// TODO: Add distribution type to optical properties
-	// dist = OptProperties->DistributionType;
-	dist = OptProperties->error_distribution_type;
-	// delop = OptProperties->RMSSlopeError / 1000.0;
-	delop = OptProperties->slope_error / 1000.0;
+    DistributionType dist;
+
+    double delop = 0.0, thetax = 0.0, thetay = 0.0, theta2 = 0.0, phi = 0.0, theta = 0.0;
+
+    glm::dmat3 RRefToLoc(0.0);
+    glm::dmat3 RLocToRef(0.0);
+
+    if (CosIn.z == 0.0) {
+        if (CosIn.x == 0.0) {
+            Euler.x = 0.0;
+            Euler.y = PI / 2.0;
+        } else {
+            Euler.x = PI / 2.0;
+            Euler.y = atan2(CosIn.y, sqrt(CosIn.x * CosIn.x + CosIn.z * CosIn.z));
+        }
+    } else {
+        Euler.x = atan2(CosIn.x, CosIn.z);
+        Euler.y = atan2(CosIn.y, sqrt(CosIn.x * CosIn.x + CosIn.z * CosIn.z));
+    }
+
+    Euler.z = 0.0;
+
+    Data::CalculateTransformMatrices(Euler, RRefToLoc, RLocToRef);
+
+    // TODO: Add distribution type to optical properties
+    // dist = OptProperties->DistributionType;
+	dist = OptProperties->get_error_distribution(side);
+    // delop = OptProperties->RMSSlopeError / 1000.0;
+	delop = OptProperties->get_slope_error(side) / 1000.0;
 
 	switch (dist)
 	{
@@ -85,7 +81,6 @@ void SurfaceNormalErrors(MTRand &myrng,
 		// gaussian distribution
 		thetax = myrng.randNorm(0., delop);
 		thetay = myrng.randNorm(0., delop);
-
 		theta2 = thetax * thetax + thetay * thetay;
 		break;
 	case DistributionType::PILLBOX:			// case 'p':
@@ -105,39 +100,38 @@ void SurfaceNormalErrors(MTRand &myrng,
 	/* {Transform to local coordinate system of ray to set up rotation matrices for coord and inverse
 	   transforms} */
 
-	TransformToLocal(PosIn, CosIn, Origin, RRefToLoc, PosOut, CosOut);
+    Data::TransformToLocal(PosIn, CosIn, Origin, RRefToLoc, PosOut, CosOut);
 
-	/* {Generate errors in terms of direction cosines in local ray coordinate system} */
-	theta = sqrt(theta2);
-	// phi = atan2(thetay, thetax); //This function appears to  present irregularities that bias results incorrectly for small values of thetay or thetax
+    /* {Generate errors in terms of direction cosines in local ray coordinate system} */
+    theta = sqrt(theta2);
+    // phi = atan2(thetay, thetax); //This function appears to  present irregularities that bias results incorrectly for small values of thetay or thetax
 	phi = myrng() * 2.0 * PI; // Therefore have chosen to randomize phi rather than calculate from randomized theta components
 	                          //  obtained from the distribution. The two approaches are equivalent save for this issue with arctan2.      wendelin 01-12-11
 
-	CosOut[0] = sin(theta) * cos(phi);
-	CosOut[1] = sin(theta) * sin(phi);
-	CosOut[2] = cos(theta);
+    CosOut = {
+        sin(theta) * cos(phi),
+        sin(theta) * sin(phi),
+        cos(theta)
+    };
 
-	for (i = 0; i < 3; i++)
-	{
-		PosIn[i] = PosOut[i];
-		CosIn[i] = CosOut[i];
-	}
+    PosIn = PosOut;
+    CosIn = CosOut;
 
 	/*{Transform perturbed ray back to element system}*/
-	TransformToReference(PosIn, CosIn, Origin, RLocToRef, PosOut, CosOut);
+    Data::TransformToReference(PosIn, CosIn, Origin, RLocToRef, PosOut, CosOut);
 }
 
 void Errors(
-	MTRand &myrng,
-	double CosIn[3],
-	int Source,
-	TSun *Sun,
-	// telement_ptr Element,
-	const OpticalProperties *OptProperties,
-	// TElement *Element,
-	// TOpticalProperties *OptProperties,
-	double CosOut[3],
-	double DFXYZ[3])
+    MTRand& myrng,
+    glm::dvec3& CosIn,
+    int Source,
+    TSun* Sun,
+    // TElement *Element,
+    // TOpticalProperties *OptProperties,
+    const SolTrace::Data::OpticalPropertySet* OptProperties,
+	const bool LastHitBackSide,
+    glm::dvec3& CosOut,
+    glm::dvec3& DFXYZ)
 {
 	/*{Purpose:  To add error terms to the perturbed ray at the surface in question
 
@@ -157,44 +151,48 @@ void Errors(
 			   Output - CosOut  = Output direction cosine vector of ray after error terms have been included
 					   }*/
 
-	double Origin[3] = {0.0, 0.0, 0.0};
-	double Euler[3] = {0.0, 0.0, 0.0};
-	double PosIn[3] = {0.0, 0.0, 0.0};
-	double PosOut[3] = {0.0, 0.0, 0.0};
-	// char dist = 'g';
-	double delop = 0, thetax = 0, thetay = 0, theta2 = 0, phi = 0, theta = 0, stest = 0;
-	uint_fast64_t i;
-	double RRefToLoc[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
-	double RLocToRef[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    glm::dvec3 Origin(0.0, 0.0, 0.0);
+    glm::dvec3 Euler(0.0, 0.0, 0.0);
+    glm::dvec3 PosIn(0.0, 0.0, 0.0);
+    glm::dvec3 PosOut(0.0, 0.0, 0.0);
 
-	if (CosIn[2] == 0.0)
+	const OpticalSide side = LastHitBackSide == false ? OpticalSide::Front : OpticalSide::Back;
+
+    // char dist = 'g';
+    double delop = 0.0, thetax = 0.0, thetay = 0.0, theta2 = 0.0, phi = 0.0, theta = 0.0, stest = 0.0;
+    uint_fast64_t i;
+
+    glm::dmat3 RRefToLoc(0.0);
+    glm::dmat3 RLocToRef(0.0);
+
+    if (CosIn.z == 0.0)
 	{
-		if (CosIn[0] == 0.0)
+        if (CosIn.x == 0.0)
 		{
-			Euler[0] = 0.0;
-			Euler[1] = PI / 2.0;
+            Euler.x = 0.0;
+            Euler.y = PI / 2.0;
 		}
 		else
 		{
-			Euler[0] = PI / 2.0;
-			Euler[1] = atan2(CosIn[1], sqrt(CosIn[0] * CosIn[0] + CosIn[2] * CosIn[2]));
+            Euler.x = PI / 2.0;
+            Euler.y = atan2(CosIn.y, sqrt(CosIn.x * CosIn.x + CosIn.z * CosIn.z));
 		}
 	}
 	else
 	{
-		Euler[0] = atan2(CosIn[0], CosIn[2]);
-		Euler[1] = atan2(CosIn[1], sqrt(CosIn[0] * CosIn[0] + CosIn[2] * CosIn[2]));
+        Euler.x = atan2(CosIn.x, CosIn.z);
+        Euler.y = atan2(CosIn.y, sqrt(CosIn.x * CosIn.x + CosIn.z * CosIn.z));
 	}
 
-	Euler[2] = 0.0;
+    Euler.z = 0.0;
 
-	CalculateTransformMatrices(Euler, RRefToLoc, RLocToRef);
+    Data::CalculateTransformMatrices(Euler, RRefToLoc, RLocToRef);
 
-	unsigned int maxcall = 0;
+    unsigned int maxcall = 0;
 	// g,p,d
 	if (Source == 1)  // sun error
 	{
-		delop = Sun->Sigma / 1000.0;
+		delop = Sun->Sigma;
 
 		switch (Sun->ShapeIndex)
 		{
@@ -212,8 +210,9 @@ void Errors(
 				thetay = 2.0 * delop * myrng() - delop;
 				theta2 = thetax * thetax + thetay * thetay;
 			} while (theta2 > (delop * delop));
+			//theta = delop * sqrt(myrng()); // Wang et al. 2010 Solar Energy 195 461-474
+			//theta2 = theta * theta;
 			break;
-
 		case SunShape::LIMBDARKENED:
 			do {
 				thetax = 2.0 * Sun->MaxAngle * myrng() - Sun->MaxAngle;
@@ -223,10 +222,7 @@ void Errors(
 
 				stest = 1.0 - 0.5138 * std::pow((theta / Sun->MaxAngle), 4);
 			} while ((myrng() > (stest / Sun->MaxIntensity)) || (theta2 > (Sun->MaxAngle * Sun->MaxAngle)));
-
-			theta2 = theta2 / 1.e6; // convert from mrad^2 to rad^2
 			break;
-
 		case SunShape::BUIE_CSR:
 			// This sun model has long tails so this might take more iterations
 			// TODO: add an option to set the max angle (thereby reducing the tail)
@@ -243,10 +239,7 @@ void Errors(
 					stest = std::exp(Sun->buie_kappa) * std::pow(std::abs(theta), Sun->buie_gamma);
 
 			} while ((myrng() > (stest / Sun->MaxIntensity)) || (theta2 > (Sun->MaxAngle * Sun->MaxAngle)));
-
-			theta2 = theta2 / 1.e6; // convert from mrad^2 to rad^2
 			break;
-
 		case SunShape::USER_DEFINED:
 			do
 			{
@@ -260,20 +253,16 @@ void Errors(
 					i++;
 
 				if (i == 0)
-					stest = Sun->SunShapeIntensity[0];
+                    stest = Sun->SunShapeIntensity[0];
 				else // linear interpolation (switched from average) 12-20-11 wendelin
 					stest = Sun->SunShapeIntensity[i - 1] + (Sun->SunShapeIntensity[i] - Sun->SunShapeIntensity[i - 1]) * (theta - Sun->SunShapeAngle[i - 1]) /
 					(Sun->SunShapeAngle[i] - Sun->SunShapeAngle[i - 1]);
 
 			} while ((myrng() > (stest / Sun->MaxIntensity)) || (theta2 > (Sun->MaxAngle * Sun->MaxAngle)));
-
-            theta2 = theta2 / 1.e6;	// convert from mrad^2 to rad^2
 			break;
-
 		default:
-			// TODO: Add error message here.
-            //throw std::exception("Unsupported sun shape in Errors function.");
-			break;
+			// TODO: This shouldn't throw here...
+			throw std::invalid_argument("Unsupported sun shape in Errors function.");
 		}
 	}
 
@@ -281,10 +270,10 @@ void Errors(
 	{
 		// dist = OptProperties->DistributionType; // errors
 		// // delop = sqrt(4.0*sqr(OptProperties->RMSSlopeError)+sqr(OptProperties->RMSSpecError))/1000.0;
-		delop = OptProperties->specularity_error / 1000.0;
+		delop = OptProperties->get_specularity_error(side);
 
 	Label_50:
-		switch (OptProperties->error_distribution_type)
+		switch (OptProperties->get_error_distribution(side))
 		{
 		case DistributionType::GAUSSIAN:			// case 'g':
 			thetax = myrng.randNorm(0., delop);
@@ -313,18 +302,19 @@ void Errors(
 	}
 
 	// {Transform to local coordinate system of ray to set up rotation matrices for coordinate and inverse transforms}
-	TransformToLocal(PosIn, CosIn, Origin, RRefToLoc, PosOut, CosOut);
+    Data::TransformToLocal(PosIn, CosIn, Origin, RRefToLoc, PosOut, CosOut);
 
-	// {Generate errors in terms of direction cosines in local ray coordinate system}
+    // {Generate errors in terms of direction cosines in local ray coordinate system}
 	theta = sqrt(theta2);
+	theta = theta / 1.e3; // convert from mrad to rad
 
-	// phi = atan2(thetay, thetax); //This function appears to  present irregularities that bias results incorrectly for small values of thetay or thetax
+    // phi = atan2(thetay, thetax); //This function appears to  present irregularities that bias results incorrectly for small values of thetay or thetax
 	phi = myrng() * 2.0 * PI; // Therefore have chosen to randomize phi rather than calculate from randomized theta components
 							  //  obtained from the distribution. The two approaches are equivalent save for this issue with arctan2.      wendelin 01-12-11
 
-	CosOut[0] = sin(theta) * cos(phi);
-	CosOut[1] = sin(theta) * sin(phi);
-	CosOut[2] = cos(theta);
+    CosOut.x = sin(theta) * cos(phi);
+    CosOut.y = sin(theta) * sin(phi);
+    CosOut.z = cos(theta);
 
 	for (i = 0; i < 3; i++)
 	{
@@ -333,15 +323,15 @@ void Errors(
 	}
 
 	//{Transform perturbed ray back to element system}
-	TransformToReference(PosIn, CosIn, Origin, RLocToRef, PosOut, CosOut);
+    Data::TransformToReference(PosIn, CosIn, Origin, RLocToRef, PosOut, CosOut);
 
-	// TODO: Remove goto, should we always do dot product check? // We could move this out of the function and into the caller.
+    // TODO: Remove goto, should we always do dot product check? // We could move this out of the function and into the caller.
 
-	/*{If reflection error application and new ray direction (after errors) physically goes through opaque surface,
+    /*{If reflection error application and new ray direction (after errors) physically goes through opaque surface,
     then go back and get new perturbation 06-12-07}*/		
 	if ((Source == 2) &&
-		(OptProperties->my_type == InteractionType::REFLECTION) &&
-		(DOT(CosOut, DFXYZ) < 0) &&
+		(OptProperties->get_interaction_type() == InteractionType::REFLECTION) &&
+        (glm::dot(CosOut, DFXYZ) < 0) &&
 		maxcall++ < 50000)
 	{
 		goto Label_50;

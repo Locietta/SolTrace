@@ -3,17 +3,17 @@
 
 #include "native_runner_types.hpp"
 #include "simulation_data_export.hpp"
-#include "thread_manager.hpp"
+#include "trace_logger.hpp"
 
 namespace SolTrace::NativeRunner
 {
 
     bool SunToPrimaryStage(
-        thread_manager_ptr manager,
+        trace_logger_ptr logger,
         TSystem *System,
         TStage *Stage,
         TSun *Sun,
-        double PosSunStage[3])
+        glm::dvec3& PosSunStage)
     {
 
         /*{Purpose: To compute the sun position within primary sage and the maximum radius of a cicle seen from sun which encircles
@@ -29,17 +29,17 @@ namespace SolTrace::NativeRunner
         }*/
 
         double dx = 0, dy = 0, dz = 0, dtot = 0;
-        double CosSunGlob[3] = {0.0, 0.0, 0.0};
-        double PosSunGlob[3] = {0.0, 0.0, 0.0};
-        double CosSunStage[3] = {0.0, 0.0, 0.0};
+        glm::dvec3 CosSunGlob(0.0, 0.0, 0.0);
+        glm::dvec3 PosSunGlob(0.0, 0.0, 0.0);
+        glm::dvec3 CosSunStage(0.0, 0.0, 0.0);
 
         uint_fast64_t i = 0;
         double x = 0, y = 0, radius = 0;
-        double Origin[3] = {0.0, 0.0, 0.0};
-        double CosDum[3] = {0.0, 0.0, 0.0};
-        double PosLoc[3] = {0.0, 0.0, 0.0};
-        double CosLoc[3] = {0.0, 0.0, 0.0};
-        double RRefToLoc[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+        glm::dvec3 Origin(0.0, 0.0, 0.0);
+        glm::dvec3 CosDum(0.0, 0.0, 0.0);
+        glm::dvec3 PosLoc(0.0, 0.0, 0.0);
+        glm::dvec3 CosLoc(0.0, 0.0, 0.0);
+        glm::dmat3 RRefToLoc(0.0);
         double radius1 = 0.0, radius2 = 0.0, radius3 = 0.0, radius4 = 0.0, radiustemp = 0.0;
         double Xsum = 0.0, Ysum = 0.0, xminsun = 0.0, yminsun = 0.0, xmaxsun = 0.0, ymaxsun = 0.0;
         double XLegofRadius = 0.0;
@@ -49,9 +49,7 @@ namespace SolTrace::NativeRunner
         // PosSunGlob[0] = Sun.Origin[0];//Position of sun coord. system origin in global system
         // PosSunGlob[1] = Sun.Origin[1]; //changed 5/1/00 to place sun at primary stage origin; direction vector
         // PosSunGlob[2] = Sun.Origin[2]; //calculated below from difference between entered sun position and global
-        PosSunGlob[0] = Stage->Origin[0]; // origin
-        PosSunGlob[1] = Stage->Origin[1];
-        PosSunGlob[2] = Stage->Origin[2];
+        PosSunGlob = Stage->Origin;
 
         // First calculate direction cosines of sun z-axis in global coord. system
         dx = 0.0 - Sun->Origin[0]; // changed 5/1/00 to tie the sun direction to global coordinate system origin
@@ -61,7 +59,7 @@ namespace SolTrace::NativeRunner
 
         if (dtot == 0.0)
         {
-            manager->error_log("error calculating sun position in primary stage, dtot = 0.0\n");
+            logger->error_log("error calculating sun position in primary stage, dtot = 0.0\n");
             return false;
         }
 
@@ -69,29 +67,31 @@ namespace SolTrace::NativeRunner
         dy = dy / dtot;
         dz = dz / dtot;
 
-        CosSunGlob[0] = dx; // direction cosines of sun Z-axis in global system.
-        CosSunGlob[1] = dy;
-        CosSunGlob[2] = dz;
+        // direction cosines of sun Z-axis in global system.
+        CosSunGlob = {dx, dy, dz};
 
         // Transform sun direction vector to Stage system; CosSunStage is dir cosines of sun ray in Stage coord. system
         // PosSunStage is position of sun coord. system origin in Stage system
-        TransformToLocal(PosSunGlob, CosSunGlob, Stage->Origin, Stage->RRefToLoc, PosSunStage, CosSunStage);
+        Data::TransformToLocal(PosSunGlob,
+                               CosSunGlob,
+                               Stage->Origin,
+                               Stage->RRefToLoc,
+                               PosSunStage,
+                               CosSunStage);
 
-        Sun->Euler[0] = atan2(CosSunStage[0], CosSunStage[2]); // Euler angles relating sun to Stage system
-        Sun->Euler[1] = asin(CosSunStage[1]);
-        Sun->Euler[2] = 0.0;
+        Sun->Euler = {atan2(CosSunStage.x,
+                            CosSunStage.z), // Euler angles relating sun to Stage system
+                      asin(CosSunStage.y),
+                      0.0};
 
         /*     {Now we have the Euler angles from Stage to the sun coordinate system.  We have to now transform the
               element locations in the stage system to the sun coordinate system and find the smallest circle in the
               xy plane of the sun system that completely encompasses the projected images of the elements onto that plane}*/
 
-        Origin[0] = 0.0; // Origin of transformed system and stage system the same
-        Origin[1] = 0.0;
-        Origin[2] = 0.0;
+        Origin = glm::dvec3(0.0); // Origin of transformed system and stage system the same
 
-        CosDum[0] = 0.0; // direction cosines not important; only interested in point locations
-        CosDum[1] = 0.0;
-        CosDum[2] = 1.0;
+        CosDum = glm::dvec3(0.0); // direction cosines not important; only interested in point locations
+
 
         Sun->MaxRad = 0.0;
         Sun->Xcm = 0.0;
@@ -101,7 +101,7 @@ namespace SolTrace::NativeRunner
         Sun->MaxYSun = -1.0e20;
         Sun->MinYSun = 1.0e20;
 
-        CalculateTransformMatrices(Sun->Euler, RRefToLoc, Sun->RLocToRef);
+        Data::CalculateTransformMatrices(Sun->Euler, RRefToLoc, Sun->RLocToRef);
 
         //{Now calculate center of mass of projected distribution. Added 09/26/05}
         Xsum = 0.0;
@@ -124,10 +124,9 @@ namespace SolTrace::NativeRunner
             // TransformToLocal(iter->second->Origin, CosDum, Origin,
             // 				 RRefToLoc, PosLoc, CosLoc);
             elem = *iter;
-            TransformToLocal(elem->Origin, CosDum, Origin,
-                             RRefToLoc, PosLoc, CosLoc);
-            Xsum += PosLoc[0];
-            Ysum += PosLoc[1];
+            Data::TransformToLocal(elem->Origin, CosDum, Origin, RRefToLoc, PosLoc, CosLoc);
+            Xsum += PosLoc.x;
+            Ysum += PosLoc.y;
         }
 
         // center of mass of distribution of element locations as projected
@@ -135,10 +134,9 @@ namespace SolTrace::NativeRunner
         Sun->Xcm = Xsum / Stage->ElementList.size();
         Sun->Ycm = Ysum / Stage->ElementList.size();
 
-        // std::cout << "Xcm = " << Sun->Xcm
-        // 		  << "\nYcm = " << Sun->Ycm
-        // 		  << "\nnelement = " << Stage->ElementList.size()
-        // 		  << std::endl;
+        // std::cout << "Xcm = " << Sun->Xcm << "\nYcm = " << Sun->Ycm
+        //           << "\nnelement = " << Stage->ElementList.size() << "\nXsum = " << Xsum
+        //           << std::endl;
 
         size_t nelements = 0;
         elem = nullptr;
@@ -150,8 +148,7 @@ namespace SolTrace::NativeRunner
             elem = *iter;
 
             // TransformToLocal(Stage->ElementList[i]->Origin, CosDum, Origin, RRefToLoc, PosLoc, CosLoc);
-            TransformToLocal(elem->Origin, CosDum, Origin,
-                             RRefToLoc, PosLoc, CosLoc);
+            Data::TransformToLocal(elem->Origin, CosDum, Origin, RRefToLoc, PosLoc, CosLoc);
             // Now have PosLoc which is the projected position of element[i] in xy plane of sun coord. system
             x = PosLoc[0] - Sun->Xcm; // changes origin to center of mass of all elements  09/26/05
             y = PosLoc[1] - Sun->Ycm;
@@ -193,7 +190,7 @@ namespace SolTrace::NativeRunner
         }
 
         if (nelements == 0)
-            manager->error_log("error calculating sun position in primary stage because there are no elements");
+            logger->error_log("error calculating sun position in primary stage because there are no elements");
 
         return (nelements > 0);
     }

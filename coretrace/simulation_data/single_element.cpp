@@ -7,31 +7,28 @@
 
 #include "aperture.hpp"
 #include "element.hpp"
-#include "vector3d.hpp"
 
 namespace SolTrace::Data {
 
 SingleElement::SingleElement() : ElementBase(),
                                  aperture(nullptr),
                                  surface(nullptr),
-                                 optics_front(),
-                                 optics_back()
+                                 opt_id(OPTICS_ID_UNASSIGNED)
 {
-    this->optics_front.set_ideal_absorption();
-    this->optics_back.set_ideal_absorption();
     return;
 }
 
-SingleElement::SingleElement(const nlohmann::ordered_json& jnode) : ElementBase(jnode),
+SingleElement::SingleElement(const nlohmann::ordered_json& jnode,
+    const OpticalPropertySetResolver& resolve_optics) : ElementBase(jnode),
                                                                     aperture(nullptr),
                                                                     surface(nullptr),
-                                                                    optics_front(),
-                                                                    optics_back()
+                                                                    opt_id(OPTICS_ID_UNASSIGNED)
 {
     this->set_aperture(Aperture::make_aperture_from_json(jnode.at("aperture")));
     this->set_surface(make_surface_from_json(jnode.at("surface")));
-    this->set_front_optical_properties(OpticalProperties(jnode.at("optics_front")));
-    this->set_back_optical_properties(OpticalProperties(jnode.at("optics_back")));
+
+    const optics_id opt_id = jnode.at("opt_id").get<optics_id>();
+    this->set_optical_property_set(resolve_optics(opt_id));
 }
 
 SingleElement::~SingleElement()
@@ -63,6 +60,16 @@ void SingleElement::enforce_user_fields_set() const
         throw std::invalid_argument(ss.str());
     }
 
+    if (this->opt_id == OPTICS_ID_UNASSIGNED ||
+        this->get_optical_property_set() == nullptr)
+    {
+        std::stringstream ss;
+        ss << "Element (Name: " << this->get_name()
+            << ", UUID: " << this->get_id()
+            << ") has no valid optical property set assigned.";
+        throw std::invalid_argument(ss.str());
+    }
+
     return;
 }
 
@@ -74,11 +81,7 @@ void SingleElement::write_json(nlohmann::ordered_json& jnode) const
     this->write_common_json(jnode);
     
     // Optical Properties
-    json joptics_front, joptics_back;
-    this->optics_front.write_json(joptics_front);
-    this->optics_back.write_json(joptics_back);
-    jnode["optics_front"] = joptics_front;
-    jnode["optics_back"] = joptics_back;
+    jnode["opt_id"] = this->opt_id;
 
     // Aperture
     json japerture;

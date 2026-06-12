@@ -19,8 +19,8 @@ void get_default_element_base(nlohmann::ordered_json& jnode)
     jnode["my_id"] = 1;
     jnode["my_name"] = "";
     jnode["stage"] = 0;
-    jnode["origin"] = Vector3d(0, 0, 0).data;
-    jnode["aim"] = Vector3d(0, 0, 0).data;
+    jnode["origin"] = SolTrace::Data::to_array(glm::dvec3(0, 0, 0));
+    jnode["aim"] = SolTrace::Data::to_array(glm::dvec3(0, 0, 0));
     jnode["zrot"] = 0;
 }
 
@@ -420,7 +420,7 @@ TEST(io_json, performance_comparison)
             ASSERT_EQ(rr_o->get_element(k), rr_r->get_element(k));
 
             // Positions
-            Vector3d pos_o; Vector3d pos_r;
+            glm::dvec3 pos_o; glm::dvec3 pos_r;
             rr_o->get_position(k, pos_o);
             rr_r->get_position(k, pos_r);
             EXPECT_DOUBLE_EQ(pos_o[0], pos_r[0]);
@@ -428,7 +428,7 @@ TEST(io_json, performance_comparison)
             EXPECT_DOUBLE_EQ(pos_o[2], pos_r[2]);
 
             // Directions
-            Vector3d dir_o; Vector3d dir_r;
+            glm::dvec3 dir_o; glm::dvec3 dir_r;
             rr_o->get_direction(k, dir_o);
             rr_r->get_direction(k, dir_r);
             EXPECT_DOUBLE_EQ(dir_o[0], dir_r[0]);
@@ -531,10 +531,10 @@ TEST(io_json, apertures_read)
     auto rect_ptr = Aperture::make_aperture_from_json(jrectangle);
     auto rect_cast = dynamic_cast<Rectangle*>(rect_ptr.get());
     ASSERT_TRUE(rect_cast != nullptr);
-    EXPECT_DOUBLE_EQ(4, rect_cast->x_length);
-    EXPECT_DOUBLE_EQ(5, rect_cast->y_length);
-    EXPECT_DOUBLE_EQ(-2, rect_cast->x_coord);
-    EXPECT_DOUBLE_EQ(-2.5, rect_cast->y_coord);
+    EXPECT_DOUBLE_EQ(4, rect_cast->x_length());
+    EXPECT_DOUBLE_EQ(5, rect_cast->y_length());
+    EXPECT_DOUBLE_EQ(-2, rect_cast->x_coord());
+    EXPECT_DOUBLE_EQ(-2.5, rect_cast->y_coord());
 
     // EQUILATERAL_TRIANGLE
     json jtriangle_eq;
@@ -542,7 +542,7 @@ TEST(io_json, apertures_read)
     jtriangle_eq["circumscribe_diameter"] = 6;
     EXPECT_NO_THROW(Aperture::make_aperture_from_json(jtriangle_eq));
     auto eq_ptr = Aperture::make_aperture_from_json(jtriangle_eq);
-    auto eq_cast = dynamic_cast<EqualateralTriangle*>(eq_ptr.get());
+    auto eq_cast = dynamic_cast<EquilateralTriangle*>(eq_ptr.get());
     ASSERT_TRUE(eq_cast != nullptr);
     EXPECT_DOUBLE_EQ(6, eq_cast->circumscribe_diameter);
 
@@ -645,7 +645,7 @@ TEST(io_json, apertures_write)
     // EQUILATERAL_TRIANGLE
     json jtriangle_eq;
     double eqdiam = 6;
-    auto triangle_eq = make_aperture<EqualateralTriangle>(eqdiam);
+    auto triangle_eq = make_aperture<EquilateralTriangle>(eqdiam);
     ASSERT_NO_THROW(triangle_eq->write_json(jtriangle_eq));
     EXPECT_DOUBLE_EQ(eqdiam, jtriangle_eq["circumscribe_diameter"]);
     EXPECT_TRUE(jtriangle_eq["aperture_type"] == SolTrace::Data::ApertureTypeMap.at(ApertureType::EQUILATERAL_TRIANGLE));
@@ -760,6 +760,6 @@ TEST(io_json, stage_read_fail)
     jstage["elements"] = json::object(); // Empty node
 
     // Try to make stage
-    EXPECT_THROW(make_stage(jstage), std::invalid_argument);
+    EXPECT_THROW(make_stage(jstage, nullptr), std::invalid_argument);
 
 }

@@ -8,20 +8,23 @@
 
 namespace SolTrace::NativeRunner {
 
-void Errors(MTRand &myrng,
-            double CosIn[3],
+void Errors(MTRand& myrng,
+            glm::dvec3& CosIn,
             int Source,
-            TSun *Sun,
+            TSun* Sun,
             // TElement *Element,
             // TOpticalProperties *OptProperties,
-            const SolTrace::Data::OpticalProperties *OptProperties,
-            double CosOut[3],
-            double DFXYZ[3]);
+            const SolTrace::Data::OpticalPropertySet* OptProperties,
+            const bool LastHitBackSide,
+            glm::dvec3& CosOut,
+            glm::dvec3& DFXYZ);
 
-void SurfaceNormalErrors(MTRand &myrng,
-                         double CosIn[3],
-                         const SolTrace::Data::OpticalProperties *OptProperties,
-                         double CosOut[3]) noexcept(false); // throw(nanexcept);
+void SurfaceNormalErrors(MTRand& myrng,
+                         glm::dvec3& CosIn,
+                         const SolTrace::Data::OpticalPropertySet* OptProperties,
+                         const bool LastHitBackSide,
+                         glm::dvec3& CosOut) noexcept(false); // throw(nanexcept);
+
 
 } // namespace SolTrace::NativeRunner
 

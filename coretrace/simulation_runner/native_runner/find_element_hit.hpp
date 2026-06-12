@@ -18,16 +18,16 @@ void FindElementHit(
     // ray info
     const int RayNumber,
     const bool in_multi_hit_loop,
-    double (&PosRayStage)[3],
-    double (&CosRayStage)[3],
+    glm::dvec3 &PosRayStage,
+    glm::dvec3 &CosRayStage,
     // outputs
-    double (&LastPosRaySurfElement)[3],
-    double (&LastCosRaySurfElement)[3],
-    double (&LastDFXYZ)[3],
+    glm::dvec3 &LastPosRaySurfElement,
+    glm::dvec3 &LastCosRaySurfElement,
+    glm::dvec3 &LastDFXYZ,
     uint_fast64_t &LastElementNumber,
     uint_fast64_t &LastRayNumber,
-    double (&LastPosRaySurfStage)[3],
-    double (&LastCosRaySurfStage)[3],
+    glm::dvec3 &LastPosRaySurfStage,
+    glm::dvec3 &LastCosRaySurfStage,
     int &ErrorFlag,
     int &LastHitBackSide,
     bool &StageHit);

@@ -4,12 +4,16 @@
 #include <array>
 #include <cstring>
 #include <exception>
+#include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
+
 #include <nlohmann/json.hpp>
 
 #include "constants.hpp"
 #include "basic_sun_position.hpp"
+#include "json_helpers.hpp"
 #include "ray_source.hpp"
 #include "simulation_data.hpp"
 #include "single_element.hpp"
@@ -17,7 +21,7 @@
 #include "sun.hpp"
 #include "surface.hpp"
 #include "utilities.hpp"
-#include "json_helpers.hpp"
+#include "virtual_element.hpp"
 
 namespace SolTrace::Data {
 
@@ -276,8 +280,10 @@ bool process_sun(FILE *fp, SimulationData &sd)
 }
 
 bool read_optic_surface(FILE *fp,
-                        OpticalProperties &optics,
-                        int &OpticalSurfaceNumber)
+                        bool is_front,
+                        OpticalPropertySet &optics,
+                        int &OpticalSurfaceNumber,
+                        double &refraction)
 {
     if (!fp)
         return false;
@@ -302,8 +308,8 @@ bool read_optic_surface(FILE *fp,
     double Transmissivity = atof(parts[6].c_str());
     double RMSSlope = atof(parts[7].c_str());
     double RMSSpecularity = atof(parts[8].c_str());
-    double RefractionIndexReal = atof(parts[9].c_str());
-    double RefractionIndexImag = atof(parts[10].c_str());
+    refraction = atof(parts[9].c_str());
+    //double RefractionIndexImag = atof(parts[10].c_str());   // This is not used
     double GratingCoeffs[4];
     GratingCoeffs[0] = atof(parts[11].c_str());
     GratingCoeffs[1] = atof(parts[12].c_str());
@@ -355,11 +361,9 @@ bool read_optic_surface(FILE *fp,
     }
 
     // Define optical properties
-    InteractionType interaction = InteractionType::REFLECTION;
     DistributionType dist = char_to_distribution(ErrorDistribution);
-    optics = OpticalProperties(interaction, dist, Transmissivity,
-                               Reflectivity, RMSSlope, RMSSpecularity,
-                               RefractionIndexReal, RefractionIndexImag);
+    OpticalSide side = is_front ? OpticalSide::Front : OpticalSide::Back;
+    optics.set_properties(side, dist, Transmissivity, Reflectivity, RMSSlope, RMSSpecularity);
 
     if (refl_angles != 0)
         delete[] refl_angles;
@@ -374,7 +378,7 @@ bool read_optic_surface(FILE *fp,
 
 bool process_optics(
     FILE *fp,
-    std::map<std::string, std::array<OpticalProperties, 2>> &optics_map)
+    std::map<std::string, OpticalPropertySet> &optics_map)
 {
     char buf[1024];
 
@@ -393,13 +397,15 @@ bool process_optics(
         {
             // int iopt = st_add_optic(cxt, (const char*)(buf + 13));
             std::string optics_name = std::string(buf + 13);
-            OpticalProperties optics_front, optics_back;
+            double refrac_front, refrac_back;
             int OpticalSurfaceNumber = 0;
-            read_optic_surface(fp, optics_front, OpticalSurfaceNumber);
-            read_optic_surface(fp, optics_back, OpticalSurfaceNumber);
 
-            optics_map[optics_name][0] = optics_front;
-            optics_map[optics_name][1] = optics_back;
+            OpticalPropertySet optics_set(InteractionType::UNKNOWN, optics_name);
+            read_optic_surface(fp, true, optics_set, OpticalSurfaceNumber, refrac_front);
+            read_optic_surface(fp, false, optics_set, OpticalSurfaceNumber, refrac_back);
+            optics_set.set_refraction_indices(refrac_front, refrac_back);
+
+            optics_map[optics_name] = optics_set;
         }
         else
             return false;
@@ -410,8 +416,10 @@ bool process_optics(
 
 bool read_element(
     FILE *fp,
-    std::map<std::string, std::array<OpticalProperties, 2>> &optics_map,
-    element_ptr &el)
+    std::map<std::string, OpticalPropertySet> &optics_map,
+    element_ptr &el,
+    SimulationData &sd,
+    bool virt)
 {
     char buf[1024];
     read_line(buf, 1023, fp);
@@ -425,14 +433,16 @@ bool read_element(
     }
 
     bool enabled = atoi(tok[0].c_str()) ? 1 : 0;
-    double xyz[3] = {
+    glm::dvec3 xyz = {
         atof(tok[1].c_str()),
         atof(tok[2].c_str()),
-        atof(tok[3].c_str())};
-    double aim[3] = {
+        atof(tok[3].c_str())
+    };
+    glm::dvec3 aim = {
         atof(tok[4].c_str()),
         atof(tok[5].c_str()),
-        atof(tok[6].c_str())};
+        atof(tok[6].c_str())
+    };
     double zrot = atof(tok[7].c_str());
 
     char ShapeIndex = ' ';
@@ -475,7 +485,13 @@ bool read_element(
     InteractionType interaction = int_to_interaction(atoi(tok[28].c_str()));
 
     // Create element
-    el = make_element<SingleElement>();
+    if (virt)
+        el = make_element<VirtualElement>();
+    else
+        el = make_element<SingleElement>();
+    
+    if (!enabled)
+        el->disable();
 
     // Make aperture
     ApertureType aperture_type = char_to_aperture(ShapeIndex);
@@ -526,32 +542,40 @@ bool read_element(
         {
             throw std::invalid_argument("This should not happen!");
         }
-        rect->x_length = 2.0 * cyl->radius;
-        rect->x_coord = -1.0 * cyl->radius;
+        rect->set_x_length(2.0 * cyl->radius);
+        rect->set_x_coord(-1.0 * cyl->radius);
     }
 
     // Set element position and orientation
-    el->set_reference_frame_geometry(Vector3d(xyz),
-                                     Vector3d(aim),
+    el->set_reference_frame_geometry(glm::dvec3(xyz),
+                                     glm::dvec3(aim),
                                      zrot);
 
     // Set optical properties
-    OpticalProperties optics_front = optics_map[optics_name][0];
-    OpticalProperties optics_back = optics_map[optics_name][1];
-    el->set_front_optical_properties(optics_front);
-    el->set_back_optical_properties(optics_back);
+    if (!virt)
+    {
+        auto optics_iter = optics_map.find(optics_name);
+        if (optics_iter == optics_map.end())
+        {
+            std::stringstream ss;
+            ss << "Element references unknown optical property set: " << optics_name;
+            throw std::runtime_error(ss.str());
+        }
 
-    // Set optical interaction type
-    el->get_front_optical_properties()->my_type = interaction;
-    el->get_back_optical_properties()->my_type = interaction;
+        OpticalPropertySet optics_set = optics_iter->second;
+        optics_set.set_interaction_type(interaction);
 
+        auto optics_ref = sd.find_or_add_optical_property_set(optics_set);
+        el->set_optical_property_set(optics_ref);
+    }
+    
     return true;
 }
 
 bool process_stages(
     FILE *fp,
     SimulationData &sd,
-    std::map<std::string, std::array<OpticalProperties, 2>> &optics_map)
+    std::map<std::string, OpticalPropertySet> &optics_map)
 {
     char buf[1024];
 
@@ -583,12 +607,20 @@ bool process_stages(
         stage->set_aim_vector(AX, AY, AZ);
         stage->set_zrot(ZRot);
         stage->compute_coordinate_rotations();
+        if (virt)
+        {
+            stage->mark_virtual();
+        }
+        else
+        {
+            stage->unmark_virtual();
+        }
 
         // Loop through elements
         for (int i_element = 0; i_element < count_element; i_element++)
         {
             element_ptr el;
-            read_element(fp, optics_map, el);
+            read_element(fp, optics_map, el, sd, virt);
             el->set_name(std::to_string(i_element));
             // TODO make virtual if stage is virtual?
 
@@ -676,7 +708,7 @@ bool load_stinput_file(SimulationData &sd, std::string filename)
     process_sun(fp, sd);
 
     // Read in Optics
-    std::map<std::string, std::array<OpticalProperties, 2>> optics_map;
+    std::map<std::string, OpticalPropertySet> optics_map;
     process_optics(fp, optics_map);
 
     // Read in Stages
@@ -684,6 +716,8 @@ bool load_stinput_file(SimulationData &sd, std::string filename)
 
     // Read in simulation parameters (if any)
     process_sim_par(fp, sd);
+
+    fclose(fp);
 
     return true;
 }
@@ -704,16 +738,7 @@ void write_json_file(SimulationData& sd, std::string filename)
     // Write parameters
     {
         json jpar;
-        SolTrace::Data::SimulationParameters sim_par = sd.get_simulation_parameters();
-        jpar["include_sun_shape_errors"] = sim_par.include_sun_shape_errors;   // bool
-        jpar["include_optical_errors"] = sim_par.include_optical_errors;       // bool
-        jpar["number_of_rays"] = sim_par.number_of_rays;                       // int
-        jpar["max_number_of_rays"] = sim_par.max_number_of_rays;               // int
-        jpar["tolerance"] = sim_par.tolerance;                                 // double
-        jpar["latitude"] = sim_par.latitude;                                   // double
-        jpar["longitude"] = sim_par.longitude;                                 // double
-        jpar["seed"] = sim_par.seed;                                           // int
-
+        sd.get_simulation_parameters().write_json(jpar);
         root["simulation_parameters"] = jpar;
     }
 
@@ -730,21 +755,7 @@ void write_json_file(SimulationData& sd, std::string filename)
             // Check source type
             if (auto sun_ptr = std::dynamic_pointer_cast<SolTrace::Data::Sun>(ray_source))
             {
-                jsrc["source_type"] = "Sun";
-
-                SolTrace::Data::SunShape shape = sun_ptr->get_shape();
-                std::string shape_string = SolTrace::Data::SunShapeMap.at(shape);
-                jsrc["my_shape"] = shape_string;                // string
-                jsrc["sigma"] = sun_ptr->get_sigma();           // double
-                jsrc["half_width"] = sun_ptr->get_half_width(); // double
-                jsrc["csr"] = sun_ptr->get_circumsolar_ratio(); // double
-                std::vector<double> user_angle, user_intensity;
-                sun_ptr->get_user_data(user_angle, user_intensity);
-                jsrc["user_angle"] = user_angle;                // vector<double>
-                jsrc["user_intensity"] = user_intensity;        // vector<double>
-
-                Vector3d pos = sun_ptr->get_position();
-                jsrc["pos"] = pos.data;
+                sun_ptr->write_json(jsrc);
             }
             else
             {
@@ -756,6 +767,23 @@ void write_json_file(SimulationData& sd, std::string filename)
         }
 
         root["ray_sources"] = jsources;
+    }
+
+    // Write optical properties
+    {
+        json joptics_top;
+        for (auto it = sd.get_optics_iterator(); !sd.is_optics_at_end(it); ++it)
+        {
+            json joptics;
+
+            SolTrace::Data::optics_id id = it->first;
+            auto optics_set = it->second;
+
+            optics_set->write_json(joptics);
+
+            joptics_top[std::to_string(id)] = joptics;
+        }
+        root["optical_properties"] = joptics_top;
     }
 
     // Write Elements
@@ -814,14 +842,7 @@ void load_json_file(SimulationData& sd, std::string filename)
     // Simulation parameters
     SolTrace::Data::SimulationParameters& sim_par = sd.get_simulation_parameters();
     json jpar = root["simulation_parameters"];
-    sim_par.include_sun_shape_errors = jpar.at("include_sun_shape_errors");
-    sim_par.include_optical_errors = jpar.at("include_optical_errors");
-    sim_par.number_of_rays = jpar.at("number_of_rays");
-    sim_par.max_number_of_rays = jpar.at("max_number_of_rays");
-    sim_par.tolerance = jpar.at("tolerance");
-    sim_par.latitude = jpar.at("latitude");
-    sim_par.longitude = jpar.at("longitude");
-    sim_par.seed = jpar.at("seed");
+    sim_par = SolTrace::Data::SimulationParameters(jpar);
 
     // Ray sources
     json jsources = root["ray_sources"];
@@ -834,32 +855,56 @@ void load_json_file(SimulationData& sd, std::string filename)
             throw std::runtime_error("Unsupported ray source type");
         }
 
-        std::string shape_string = jsrc.at("my_shape");
-        SunShape shape = get_enum_from_string(shape_string, SunShapeMap, SunShape::UNKNOWN);
-        if (shape == SunShape::UNKNOWN)
-        {
-            // Error reading sunshape
-            throw std::runtime_error("Error reading sun shape");
-        }
-        double sigma = json_get_double(jsrc, "sigma");
-        double half_width = json_get_double(jsrc, "half_width");
-        double csr = json_get_double(jsrc, "csr");
-
-        std::vector<double> user_angle = jsrc.at("user_angle");
-        std::vector<double> user_intensity = jsrc.at("user_intensity");
-
-        std::array<double, 3> pos_arr = jsrc.at("pos").get<std::array<double, 3>>();
-        Vector3d pos_vec(pos_arr.data());
-
         // Make sun for simulation data
-        auto sun = make_ray_source<Sun>();
-        sun->set_position(pos_vec);
-        sun->set_shape(shape, sigma, half_width, csr, user_angle, user_intensity);
+        auto sun = make_ray_source<Sun>(jsrc);
         sd.add_ray_source(sun);
     }
 
+    // Optical properties
+    json joptics = root.at("optical_properties");
+    for (auto& [key, joptic] : joptics.items())
+    {
+        optics_id opt_id = static_cast<optics_id>(std::stoll(key));
+        OpticalPropertySet opt_set(joptic);
+
+        // Check for pre-existing optical property sets
+        const OpticalPropertySet* existing = sd.get_optical_property_set(opt_id);
+        if (existing != nullptr)
+        {
+            // This should be a built in optical property set
+            if (opt_id >= 0)
+                throw std::runtime_error("Custom optical property set already exists");
+
+            // Ensure loaded built in matches
+            if (*existing != opt_set)
+            {
+                std::stringstream ss;
+                ss << "Built-in optical property set mismatch for id " << opt_id;
+                throw std::runtime_error(ss.str());
+            }
+        }
+        else // Insert new optical property set
+        {
+            auto ptr = std::make_shared<OpticalPropertySet>(opt_set);
+            bool flag = sd.my_optical_property_sets.insert_item(opt_id, ptr);
+            if (!flag)
+            {
+                std::stringstream ss;
+                ss << "Failed to insert optical property set id from JSON: " << opt_id;
+                throw std::runtime_error(ss.str());
+            }
+        }
+    }
+    // Set optical property set next id
+    sd.my_optical_property_sets.recompute_next_id(0);
+
     // Elements
     json jelements = root["elements"];
+    auto resolve_optics = [&sd](const optics_id id)
+    {
+        auto ptr = sd.my_optical_property_sets.get_item(id);
+        return OpticalPropertySetReference{ id, ptr };
+    };
     for (auto& [key, jelement] : jelements.items())
     {
         // Check if stage
@@ -867,19 +912,19 @@ void load_json_file(SimulationData& sd, std::string filename)
         if (jelement.contains("is_stage") && jelement.at("is_stage") == true)
         {
             // Make stage
-            stage_ptr stage = make_stage(jelement);
+            stage_ptr stage = make_stage(jelement, resolve_optics);
             sd.add_stage(stage);
         }
         // Composite
         else if (jelement.contains("is_composite") && jelement.at("is_composite") == true)
         {
-            composite_element_ptr comp = make_element<CompositeElement>(jelement);
+            composite_element_ptr comp = make_element<CompositeElement>(jelement, resolve_optics);
             sd.add_element(comp);
         }
         // Single Element
         else
         {
-            single_element_ptr single = make_element<SingleElement>(jelement);
+            single_element_ptr single = make_element<SingleElement>(jelement, resolve_optics);
             sd.add_element(single);
         }
     }

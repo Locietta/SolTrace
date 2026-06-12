@@ -210,6 +210,7 @@ public:
 	bool is_include_errors;
 	bool is_point_focus;
 	bool use_refactor_trace;
+	int runner_type;	// 0: Legacy, 1: native, 2: optix, 3: optix file load
 };
 
 

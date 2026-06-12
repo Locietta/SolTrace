@@ -1,4 +1,3 @@
-
 /*******************************************************************************************************
 *  Copyright 2018 Alliance for Sustainable Energy, LLC
 *
@@ -58,6 +57,7 @@
 #include <wx/time.h>
 #include <wx/datetime.h>
 #include <wx/thread.h>
+#include <wx/filefn.h>
 
 #include <wex/exttext.h>
 #include <wex/numeric.h>
@@ -71,7 +71,8 @@
 static wxThreadProgressDialog *g_currentThreadProgress = NULL;
 
 enum{ ID_NUM_RAYS = wxID_HIGHEST+923,
-	  ID_NUM_RAYS_SUN, ID_NUM_CPU, ID_SEED, ID_INCL_SUNSHAPE, ID_INCL_ERRORS, ID_INCL_POINTFOCUS, ID_USE_REFACTOR};
+	  ID_NUM_RAYS_SUN, ID_NUM_CPU, ID_SEED, ID_INCL_SUNSHAPE, ID_INCL_ERRORS, ID_INCL_POINTFOCUS, ID_USE_REFACTOR,
+	  ID_RUNNER_RADIO};
 
 BEGIN_EVENT_TABLE( TraceForm, wxPanel )
 	EVT_BUTTON( wxID_SETUP, TraceForm::OnCommand )
@@ -84,6 +85,7 @@ BEGIN_EVENT_TABLE( TraceForm, wxPanel )
 	EVT_CHECKBOX( ID_INCL_ERRORS, TraceForm::OnCommand)
 	EVT_CHECKBOX( ID_INCL_POINTFOCUS, TraceForm::OnCommand)
 	EVT_CHECKBOX( ID_USE_REFACTOR, TraceForm::OnCommand)
+	EVT_RADIOBOX( ID_RUNNER_RADIO, TraceForm::OnCommand)
 
 
 END_EVENT_TABLE()
@@ -115,6 +117,23 @@ TraceForm::TraceForm( wxWindow *parent, Project &prj )
 	flxsizer->Add( m_asPowerTower = new wxCheckBox( sizer1->GetStaticBox(), ID_INCL_POINTFOCUS, "Point-focus system" ), 0, wxALL|wxALIGN_CENTER_VERTICAL, 3 );
 	flxsizer->AddStretchSpacer();
 	flxsizer->Add(m_use_refactor_trace = new wxCheckBox(sizer1->GetStaticBox(), ID_USE_REFACTOR, "Use refactor trace"), 0, wxALL | wxALIGN_CENTER_VERTICAL, 3);
+	flxsizer->AddStretchSpacer();
+
+	// Add a radio box for runner selection
+	wxString runnerChoices[] = { "Legacy", "Native runner (cpu)", "Native runner direct file (cpu)", "OptiX runner (gpu)", "Embree (cpu)"};
+	m_runner_choice = new wxRadioBox(
+		sizer1->GetStaticBox(),
+		ID_RUNNER_RADIO,
+		"Select runner",
+		wxDefaultPosition,
+		wxDefaultSize,
+		WXSIZEOF(runnerChoices),
+		runnerChoices,
+		1, // 1 column
+		wxRA_SPECIFY_COLS
+	);
+	m_runner_choice->SetSelection(0); // Default to "None"
+	flxsizer->Add(m_runner_choice, 2, wxALL | wxEXPAND, 3);
 
 
 	sizer1->Add( flxsizer, 0, wxALL, 5 );
@@ -173,11 +192,16 @@ void TraceForm::UpdateFromData()
 	m_inclOpticalErrors->SetValue(T.is_include_errors);
 	m_asPowerTower->SetValue(T.is_point_focus);
 	m_use_refactor_trace->SetValue(T.use_refactor_trace);
+
+	// Set radio box selection
+	m_runner_choice->SetSelection(T.runner_type);
+
 }
 
 
 void TraceForm::SetOptions( size_t nrays, size_t nmaxsunrays, int ncpu, int seed,
-	bool sunshape, bool opterr, bool aspowertower, bool use_refactor_trace )
+	bool sunshape, bool opterr, bool aspowertower, bool use_refactor_trace,
+	int runner_type)
 {
 	m_numRays->SetValue( nrays );
 	m_numMaxSunRays->SetValue( nmaxsunrays );
@@ -187,6 +211,7 @@ void TraceForm::SetOptions( size_t nrays, size_t nmaxsunrays, int ncpu, int seed
 	m_inclOpticalErrors->SetValue( opterr );
     m_asPowerTower->SetValue( aspowertower );
 	m_use_refactor_trace->SetValue( use_refactor_trace );
+	m_runner_choice->SetSelection(runner_type);
 
 	TraceSettings& T = m_prj.Trace_Settings;
 	T.n_rays = m_numRays->AsUnsigned();
@@ -197,10 +222,12 @@ void TraceForm::SetOptions( size_t nrays, size_t nmaxsunrays, int ncpu, int seed
 	T.is_include_errors = m_inclOpticalErrors->GetValue();
 	T.is_point_focus = m_asPowerTower->GetValue();
 	T.use_refactor_trace = m_use_refactor_trace->GetValue();
+	T.runner_type = m_runner_choice->GetSelection();
 }
 
 void TraceForm::GetOptions( size_t *nrays, size_t *nmaxsunrays, int *ncpu, int *seed,
-	bool *sunshape, bool *opterr, bool *aspowertower, bool *use_refactor_trace )
+	bool *sunshape, bool *opterr, bool *aspowertower, bool *use_refactor_trace,
+	int *runner_type)
 {
 	if ( nrays ) *nrays = m_numRays->AsUnsigned();
 	if ( nmaxsunrays ) *nmaxsunrays = m_numMaxSunRays->AsUnsigned();
@@ -210,6 +237,7 @@ void TraceForm::GetOptions( size_t *nrays, size_t *nmaxsunrays, int *ncpu, int *
 	if ( opterr ) *opterr = m_inclOpticalErrors->GetValue();
     if ( aspowertower ) *aspowertower = m_asPowerTower->GetValue();
 	if ( use_refactor_trace ) *use_refactor_trace = m_use_refactor_trace->GetValue();
+	if ( runner_type) *runner_type = m_runner_choice->GetSelection();
 }
 
 
@@ -255,6 +283,11 @@ void TraceForm::OnCommand( wxCommandEvent &evt )
 	case ID_USE_REFACTOR:
 		T.use_refactor_trace = m_use_refactor_trace->GetValue();
 		break;
+	case ID_RUNNER_RADIO:
+	{
+		T.runner_type = m_runner_choice->GetSelection();
+		break;
+	}
 	case wxID_EXECUTE:
 		StartTrace();
 		break;
@@ -282,19 +315,34 @@ int TraceForm::StartTrace( bool , bool quiet, wxArrayString *err )
 
 	m_lastSeedVal = m_seed->AsInteger();
 	
-static wxArrayString s_err;
+	static wxArrayString s_err;
 	wxArrayString &ref_errors = err ? *err : s_err;
 
 	ref_errors.clear();
 
-	int msec = RunTraceMultiThreaded( &m_prj, m_numRays->AsInteger(),
+	int msec = 0;
+	if (m_prj.Trace_Settings.runner_type > 0)
+	{
+		msec = RunSolTrace20(&m_prj, m_numRays->AsInteger(),
 			m_numMaxSunRays->AsInteger(),
 			m_numCpus->AsInteger(),
 			&m_lastSeedVal,
 			m_inclSunShape->GetValue(),
 			m_inclOpticalErrors->GetValue(),
-            m_asPowerTower->GetValue(),
-			ref_errors );
+			m_asPowerTower->GetValue(),
+			ref_errors, m_prj.Trace_Settings.runner_type);
+	}
+	else
+	{
+		msec = RunTraceMultiThreaded(&m_prj, m_numRays->AsInteger(),
+			m_numMaxSunRays->AsInteger(),
+			m_numCpus->AsInteger(),
+			&m_lastSeedVal,
+			m_inclSunShape->GetValue(),
+			m_inclOpticalErrors->GetValue(),
+			m_asPowerTower->GetValue(),
+			ref_errors);
+	}
 
 	if ( msec < 0 )
 		wxShowTextMessageDialog( wxJoin( ref_errors, '\n' ) );
@@ -862,6 +910,131 @@ int RunTraceMultiThreaded( Project *System, int nrays, int nmaxrays,
 	return errors_found ? -2 : millisec;
 }
 
+int RunSolTrace20(Project* System, int nrays, int nmaxrays,
+	int nmaxthreads, int* seed, bool sunshape, bool opterrs, bool aspowertower,
+	wxArrayString& errors, int runner_type)
+{
+	if (nmaxthreads < 1)
+	{
+		errors.Add("invalid number of cpu threads");
+		return -888;
+	}
+
+	if (seed == 0)
+	{
+		errors.Add("invalid seed pointer");
+		return -1;
+	}
+
+	CheckSeed(seed);
+
+	st_context_t spcxt = ::st_create_context();
+	if (!spcxt)
+	{
+		errors.Add("failed to create simulation context");
+		return -1;
+	}
+
+	wxString file_name;
+	auto cleanup = [&]()
+	{
+		if (!file_name.IsEmpty() && wxFileExists(file_name))
+			wxRemoveFile(file_name);
+
+		::st_free_context(spcxt);
+	};
+
+	st_runner_type_t runner_enum = (st_runner_type_t)runner_type;
+	if (runner_enum <= ST_RUNNER_LEGACY || runner_enum >= ST_RUNNER_COUNT)
+	{
+		errors.Add(wxString::Format("invalid runner type: %d", runner_type));
+		cleanup();
+		return -1;
+	}
+
+	int result = LoadSystemIntoContext(System, spcxt, errors);
+	if (result < 0)
+	{
+		errors.Add("error loading system into simulation context");
+		cleanup();
+		return -1;
+	}
+
+	::st_sim_errors(spcxt, sunshape ? 1 : 0, opterrs ? 1 : 0);
+	::st_sim_params(spcxt, nrays, nmaxrays, aspowertower);
+
+	if (runner_enum == ST_RUNNER_NATIVE_FILE)
+	{
+		wxString basePath = wxFileName::CreateTempFileName("soltrace_case");
+		if (basePath.IsEmpty())
+		{
+			errors.Add("failed to create temporary file");
+			cleanup();
+			return -1;
+		}
+
+		wxString finalPath = basePath + ".stinput";
+		if (!wxRenameFile(basePath, finalPath, true))
+		{
+			wxRemoveFile(basePath);
+			errors.Add("failed to rename temporary file");
+			cleanup();
+			return -1;
+		}
+
+		FILE* fp = fopen(finalPath.c_str(), "w");
+		if (!fp)
+		{
+			errors.Add("failed to open temporary input file");
+			file_name = finalPath;
+			cleanup();
+			return -1;
+		}
+
+		bool ok = System->Write(fp);
+		fclose(fp);
+
+		if (!ok)
+		{
+			errors.Add("failed to write temporary input file");
+			file_name = finalPath;
+			cleanup();
+			return -1;
+		}
+
+		file_name = finalPath;
+	}
+
+	wxStopWatch sw;
+	const char* error_msg = "";
+	int count_raydata = ::st_sim_run_SolTrace20(spcxt, *seed, runner_enum, &error_msg, file_name, nmaxthreads);
+	if (count_raydata <= 0)
+	{
+		errors.Add(error_msg && *error_msg ? wxString::FromUTF8(error_msg) : "Unknown error");
+		cleanup();
+		return -2;
+	}
+
+	System->RecomputeTransforms();
+
+	std::vector<st_context_t> ContextList;
+	ContextList.push_back(spcxt);
+
+	bool flag = System->Results.ReadResultsFromContextList(ContextList);
+	if (!flag)
+	{
+		errors.Add("Allocation error reading results from trace context");
+		cleanup();
+		return -3;
+	}
+
+	CountRayHitsPerElement(System);
+
+	int millisec = (int)sw.Time();
+
+	cleanup();
+	return millisec;
+}
 
 /*
 int trace_callback_single_thread(st_uint_t ntracedtotal, st_uint_t ntraced,

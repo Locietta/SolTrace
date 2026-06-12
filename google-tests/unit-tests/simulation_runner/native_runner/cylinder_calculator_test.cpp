@@ -36,16 +36,16 @@ TEST(CylinderCalculator, Case1)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(-1.0, -1.0, -1.0);
-    Vector3d m(0.0, 1.0, 0.0);
+    glm::dvec3 x0(-1.0, -1.0, -1.0);
+    glm::dvec3 m(0.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 1);
     EXPECT_EQ(t, 0.0);
@@ -61,16 +61,16 @@ TEST(CylinderCalculator, Case2)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(5.0, 0.0, 1.0);
-    Vector3d m(-1.0, 1.0, 1.0);
+    glm::dvec3 x0(5.0, 0.0, 1.0);
+    glm::dvec3 m(-1.0, 1.0, 1.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 1);
     EXPECT_EQ(t, 0.0);
@@ -87,22 +87,22 @@ TEST(CylinderCalculator, Case3)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(5.0, -3.0, 1.0);
-    Vector3d m(-1.0, 1.0, 0.0);
+    glm::dvec3 x0(5.0, -3.0, 0.0);
+    glm::dvec3 m(-1.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 0);
     EXPECT_NEAR(t, 4.0, TOL);
     EXPECT_NEAR(xt[0], 1.0, TOL);
     EXPECT_NEAR(xt[1], 1.0, TOL);
-    EXPECT_NEAR(xt[2], 1.0, TOL);
+    EXPECT_NEAR(xt[2], 0.0, TOL);
     EXPECT_NEAR(mt[0], m[0], TOL);
     EXPECT_NEAR(mt[1], m[1], TOL);
     EXPECT_NEAR(mt[2], m[2], TOL);
@@ -119,22 +119,22 @@ TEST(CylinderCalculator, Case4)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(0.0, -1.0, 1.0);
-    Vector3d m(-1.0, 1.0, 0.0);
+    glm::dvec3 x0(0.0, -1.0, 0.0);
+    glm::dvec3 m(-1.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 0);
     EXPECT_NEAR(t, 1.0, TOL);
     EXPECT_NEAR(xt[0], -1.0, TOL);
     EXPECT_NEAR(xt[1], 0.0, TOL);
-    EXPECT_NEAR(xt[2], 1.0, TOL);
+    EXPECT_NEAR(xt[2], 0.0, TOL);
     EXPECT_NEAR(mt[0], m[0], TOL);
     EXPECT_NEAR(mt[1], m[1], TOL);
     EXPECT_NEAR(mt[2], m[2], TOL);
@@ -150,16 +150,16 @@ TEST(CylinderCalculator, Case5)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(5.0, ymax, 1.0);
-    Vector3d m(-1.0, 1.0, 0.0);
+    glm::dvec3 x0(5.0, ymax, 1.0);
+    glm::dvec3 m(-1.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 1);
     EXPECT_EQ(t, 0.0);
@@ -175,16 +175,16 @@ TEST(CylinderCalculator, Case6)
     CylinderCalculator calc(surface, aperture);
 
     // Ray position and direction
-    Vector3d x0(5.0, ymax, 1.0);
-    Vector3d m(-1.0, 1.0, 0.0);
+    glm::dvec3 x0(5.0, ymax, 1.0);
+    glm::dvec3 m(-1.0, 1.0, 0.0);
 
     // Solution values
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
 
-    int result = calc.intersect(x0.data, m.data, xt.data, mt.data, gradf.data, &t);
+    int result = calc.intersect(x0, m, xt, mt, gradf, &t);
 
     EXPECT_EQ(result, 1);
     EXPECT_EQ(t, 0.0);

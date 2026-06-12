@@ -11,9 +11,9 @@
 #include "stage_element.hpp"
 #include "sun.hpp"
 #include "surface.hpp"
-#include "vector3d.hpp"
+#include "utilities.hpp"
 #include "virtual_element.hpp"
-
+#include "matvec.hpp"
 #include "cst_templates/heliostat.hpp"
 #include "cst_templates/linear_fresnel.hpp"
 #include "cst_templates/parabolic_dish.hpp"

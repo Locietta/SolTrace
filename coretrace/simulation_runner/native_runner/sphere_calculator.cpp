@@ -11,7 +11,7 @@
 #include "simulation_data_export.hpp"
 #include "surface.hpp"
 
-// #include "vector3d.hpp"
+// #include "glm::dvec3.hpp"
 
 namespace SolTrace::NativeRunner
 {
@@ -58,11 +58,11 @@ namespace SolTrace::NativeRunner
         return;
     }
 
-    int SphereCalculator::intersect(const double PosLoc[3],
-                                    const double CosLoc[3],
-                                    double PosXYZ[3],
-                                    double CosKLM[3],
-                                    double DFXYZ[3],
+    int SphereCalculator::intersect(const glm::dvec3 PosLoc,
+                                    const glm::dvec3 CosLoc,
+                                    glm::dvec3& PosXYZ,
+                                    glm::dvec3& CosKLM,
+                                    glm::dvec3& DFXYZ,
                                     double *PathLength)
     {
         // std::cout << "SphereCalculator" << std::endl;
@@ -77,15 +77,15 @@ namespace SolTrace::NativeRunner
         double a, b, c;
         double scratch;
 
-        Vector3d p1, p2;
+        glm::dvec3 p1, p2;
 
         c = x0 * x0 + y0 * y0 + z0 * z0 - 2.0 * r * z0;
         b = 2.0 * (alpha * x0 + beta * y0 + gamma * (z0 - r));
         a = alpha * alpha + beta * beta + gamma * gamma;
 
-        ZeroVec3(PosXYZ);
-        ZeroVec3(CosKLM);
-        ZeroVec3(DFXYZ);
+        PosXYZ = {};
+        CosKLM = {};
+        DFXYZ = {};
 
         scratch = b * b - 4.0 * a * c;
 
@@ -105,8 +105,8 @@ namespace SolTrace::NativeRunner
 
             // z1 = z0 + gamma * t1;
             // z2 = z0 + gamma * t2;
-            AddVec3(1.0, PosLoc, t1, CosLoc, p1.data);
-            AddVec3(1.0, PosLoc, t2, CosLoc, p2.data);
+            p1 = PosLoc + t1 * CosLoc;
+            p2 = PosLoc + t2 * CosLoc;
 
             // std::cout << "P1: " << p1
             //           << "\nP2: " << p2
@@ -116,14 +116,14 @@ namespace SolTrace::NativeRunner
             {
                 // SetVec3(PosXYZ, x0 + t1 * alpha, y0 + t1 * beta, z1);
                 // AddVec3(1.0, PosLoc, t1, CosLoc, PosXYZ);
-                CopyVec3(PosXYZ, p1.data);
+                PosXYZ = p1;
                 *PathLength = t1;
             }
             else if (t2 > 0.0 && p2[2] <= r && this->aper->is_in(p2[0], p2[1]))
             {
                 // SetVec3(PosXYZ, x0 + t2 * alpha, y0 + t2 * beta, z2);
                 // AddVec3(1.0, PosLoc, t2, CosLoc, PosXYZ);
-                CopyVec3(PosXYZ, p2.data);
+                PosXYZ = p2;
                 *PathLength = t2;
             }
             else
@@ -136,13 +136,13 @@ namespace SolTrace::NativeRunner
         if (sts == 0)
         {
             this->surface_normal(PosXYZ, DFXYZ);
-            CopyVec3(CosKLM, CosLoc);
+            CosKLM = CosLoc;
         }
 
         // if (sts == 0)
         // {
-        //     Vector3d p0(PosLoc), v0(CosLoc);
-        //     Vector3d p1(PosXYZ), n0(DFXYZ);
+        //     glm::dvec3 p0(PosLoc), v0(CosLoc);
+        //     glm::dvec3 p1(PosXYZ), n0(DFXYZ);
 
         //     std::cout << "Ray Position: " << p0
         //               << "\nRay Direction: " << v0
@@ -155,8 +155,8 @@ namespace SolTrace::NativeRunner
         return sts;
     }
 
-    void SphereCalculator::surface_normal(const double PosXYZ[3],
-                                          double DFXYZ[3])
+    void SphereCalculator::surface_normal(const glm::dvec3 PosXYZ,
+                                          glm::dvec3 &DFXYZ)
     {
         double x0 = PosXYZ[0];
         double y0 = PosXYZ[1];

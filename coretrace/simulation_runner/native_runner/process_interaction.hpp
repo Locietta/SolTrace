@@ -12,10 +12,11 @@ namespace SolTrace::NativeRunner {
 
 void ProcessInteraction(
     // system info
-    TSystem *System,
-    MTRand &myrng,
+    TSystem* System,
+    MTRand& myrng,
     const bool IncludeSunShape,
-    const SolTrace::Data::OpticalProperties *optics,
+    const SolTrace::Data::OpticalPropertySet* optics,
+    const bool LastHitBackSide,
     const bool IncludeErrors,
     // stage info
     const int i,
@@ -25,23 +26,25 @@ void ProcessInteraction(
     // const int k,
     // ray info
     const uint_fast64_t MultipleHitCount,
-    double (&LastDFXYZ)[3],
+    glm::dvec3& LastDFXYZ,
     // Outputs
-    double (&LastCosRaySurfElement)[3],
-    int &ErrorFlag,
-    double (&CosRayOutElement)[3],
-    double (&LastPosRaySurfElement)[3],
-    double (&PosRayOutElement)[3]);
+    glm::dvec3& LastCosRaySurfElement,
+    int& ErrorFlag,
+    glm::dvec3& CosRayOutElement,
+    glm::dvec3& LastPosRaySurfElement,
+    glm::dvec3& PosRayOutElement);
 
-void Interaction(MTRand &myrng,
-                 const double PosXYZ[3],
-                 const double CosKLM[3],
-                 const double DFXYZ[3],
-                 const SolTrace::Data::OpticalProperties *Opticl,
+void Interaction(MTRand& myrng,
+                 const glm::dvec3& PosXYZ,
+                 const glm::dvec3& CosKLM,
+                 const glm::dvec3& DFXYZ,
+                 const SolTrace::Data::OpticalPropertySet* Opticl,
+                 const bool LastHitBackSide,
                  double Wavelength,
-                 double PosOut[3],
-                 double CosOut[3],
-                 int *ErrorFlag);
+                 glm::dvec3& PosOut,
+                 glm::dvec3& CosOut,
+                 int* ErrorFlag);
+
 
 } // namespace SolTrace::NativeRunner
 

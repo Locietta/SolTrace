@@ -7,8 +7,7 @@
 #include "constants.hpp"
 #include "element.hpp"
 #include "surface.hpp"
-
-#include "cst_templates/utilities.hpp"
+#include "utilities.hpp"
 
 namespace SolTrace::Data
 {
@@ -34,14 +33,9 @@ namespace SolTrace::Data
           tracking_limit_lower(-180.0),
           tracking_limit_upper(180.0)
     {
-        this->optics_absorber.set_ideal_absorption();
-        this->optics_mirror.set_ideal_reflection();
-        this->optics_env_out.set_ideal_transmission();
-        this->optics_env_in.set_ideal_transmission();
-
-        this->tracking_origin.set_values(1.0, 0.0, 0.0);
-        this->rotation_axis.set_values(0.0, 1.0, 0.0);
-        this->neutral_normal.set_values(0.0, 0.0, 1.0);
+        this->tracking_origin = {1.0, 0.0, 0.0};
+        this->rotation_axis = {0.0, 1.0, 0.0};
+        this->neutral_normal = {0.0, 0.0, 1.0};
     }
 
     LinearFresnel::~LinearFresnel()
@@ -94,18 +88,19 @@ namespace SolTrace::Data
 
         // Convert spherical coordinates to cartesian coordinates
         // y-axis
-        this->rotation_axis.set_values(sin(inc) * cos(pol),
+        this->rotation_axis = { sin(inc) * cos(pol),
                                        sin(inc) * sin(pol),
-                                       cos(inc));
+                                       cos(inc) };
 
         // z-axis
-        this->neutral_normal.set_values(sin(-el) * cos(pol),
+        this->neutral_normal = { sin(-el) * cos(pol),
                                         sin(-el) * sin(pol),
-                                        cos(-el));
+                                        cos(-el) };
 
-        cross_product(this->rotation_axis,
-                      this->neutral_normal,
-                      this->tracking_origin);
+        this->tracking_origin = glm::cross(
+            this->rotation_axis,
+            this->neutral_normal
+        );
 
         return;
     }
@@ -176,10 +171,10 @@ namespace SolTrace::Data
         return;
     }
 
-    void LinearFresnel::set_optics(const OpticalProperties &mirror,
-                                   const OpticalProperties &absorber,
-                                   const OpticalProperties &envelop_outer,
-                                   const OpticalProperties &envelop_inner)
+    void LinearFresnel::set_optics(const OpticalPropertySetReference mirror,
+                                   const OpticalPropertySetReference absorber,
+                                   const OpticalPropertySetReference envelop_outer,
+                                   const OpticalPropertySetReference envelop_inner)
     {
         this->optics_mirror = mirror;
         this->optics_absorber = absorber;
@@ -307,16 +302,16 @@ namespace SolTrace::Data
         panel_len_y /= this->num_panels_y;
 
         element_id sts;
-        Vector3d origin;
-        Vector3d aim;
-        Vector3d receiver_pos(0.0,
+        glm::dvec3 origin;
+        glm::dvec3 aim;
+        glm::dvec3 receiver_pos(0.0,
                               0.0,
                               this->receiver_height);
         double panel_y, flen;
         single_element_ptr mirror;
         aperture_ptr ap;
         surface_ptr surf;
-        Vector3d khat(0.0, 0.0, 1.0);
+        glm::dvec3 khat(0.0, 0.0, 1.0);
 
         for (int_fast64_t i = 0; i < this->num_panels_x; ++i)
         {
@@ -325,18 +320,18 @@ namespace SolTrace::Data
             {
                 mirror = make_element<SingleElement>();
 
-                origin.set_values(panel_x, panel_y, 0.0);
-                vector_add(1.0, receiver_pos, -1.0, origin, aim);
+                origin = {panel_x, panel_y, 0.0};
+                aim = 1.0 * receiver_pos + -1.0 * origin;
                 // Project into xz-plane
                 aim[1] = 0.0;
-                make_unit_vector(aim);
+                aim = glm::normalize(aim);
                 // std::cout << "Panel x: " << panel_x
                 //           << "\nPanel y: " << panel_y
                 //           << "\nRec: " << aim
                 //           << std::endl;
-                vector_add(0.5, khat, 0.5, aim);
+                aim = 0.5 * khat + 0.5 * aim;
                 // std::cout << "Aim: " << aim << std::endl;
-                vector_add(1.0, origin, 1000.0, aim);
+                aim = 1.0 * origin + 1000.0 * aim;
                 // std::cout << "Aim Point: " << aim << std::endl;
                 // std::cout << "Origin: " << origin << std::endl;
                 mirror->set_reference_frame_geometry(origin, aim, 0.0);
@@ -358,8 +353,7 @@ namespace SolTrace::Data
                 }
                 mirror->set_surface(surf);
 
-                mirror->set_front_optical_properties(this->optics_mirror);
-                mirror->set_back_optical_properties(this->optics_mirror);
+                mirror->set_optical_property_set(optics_mirror);
                 mirror->enable();
 
                 std::stringstream name;
@@ -391,16 +385,18 @@ namespace SolTrace::Data
         // TODO: Single element at the moment. Break up into multiple tubes.
         auto abs = make_element<SingleElement>();
         abs->set_name("Absorber");
-        origin.set_values(0.0, 0.0,
-                          this->receiver_height - 0.5 * this->abs_diameter);
-        aim.set_values(0.0, 0.0, 1.0);
-        vector_add(1.0, origin, 1.0, aim);
+        origin = {
+            0.0,
+            0.0,
+            this->receiver_height - 0.5 * this->abs_diameter
+        };
+        aim = {0.0, 0.0, 1.0};
+        aim = 1.0 * origin + 1.0 * aim;
         abs->set_reference_frame_geometry(origin, aim, 0.0);
         abs->set_aperture(make_aperture<Rectangle>(this->abs_diameter,
                                                    this->aperture_size_y));
         abs->set_surface(make_surface<Cylinder>(0.5 * this->abs_diameter));
-        abs->set_front_optical_properties(this->optics_absorber);
-        abs->set_back_optical_properties(this->optics_absorber);
+        abs->set_optical_property_set(optics_absorber);
         abs->enable();
 
         this->absorbers.push_back(abs);
@@ -414,16 +410,18 @@ namespace SolTrace::Data
         // Envelope -- Outer
         auto envout = make_element<SingleElement>();
         envout->set_name("EnvelopeOuter");
-        origin.set_values(0.0, 0.0,
-                          this->receiver_height - 0.5 * this->env_diameter);
-        aim.set_values(0.0, 0.0, 1.0);
-        vector_add(1.0, origin, 1.0, aim);
+        origin = {
+            0.0,
+            0.0,
+            this->receiver_height - 0.5 * this->env_diameter
+        };
+        aim = {0.0, 0.0, 1.0};
+        aim = 1.0 * origin + 1.0 * aim;
         envout->set_reference_frame_geometry(origin, aim, 0.0);
         envout->set_aperture(make_aperture<Rectangle>(this->env_diameter,
                                                       this->aperture_size_y));
         envout->set_surface(make_surface<Cylinder>(0.5 * this->env_diameter));
-        envout->set_front_optical_properties(this->optics_env_out);
-        envout->set_back_optical_properties(this->optics_env_out);
+        envout->set_optical_property_set(optics_env_out);
         envout->enable();
 
         this->envelope.push_back(envout);
@@ -436,18 +434,19 @@ namespace SolTrace::Data
         // Envelope -- Inner
         auto envin = make_element<SingleElement>();
         envin->set_name("EnvelopeInner");
-        origin.set_values(0.0, 0.0,
-                          this->receiver_height -
-                              0.5 * this->env_diameter + this->env_thickness);
-        aim.set_values(0.0, 0.0, 1.0);
-        vector_add(1.0, origin, 1.0, aim);
+        origin = {
+            0.0,
+            0.0,
+            this->receiver_height -
+                0.5 * this->env_diameter + this->env_thickness};
+        aim = {0.0, 0.0, 1.0};
+        aim = 1.0 * origin + 1.0 * aim;
         envin->set_reference_frame_geometry(origin, aim, 0.0);
         double ap_x = this->env_diameter - 2 * this->env_thickness;
         double ap_y = this->aperture_size_y;
         envin->set_aperture(make_aperture<Rectangle>(ap_x, ap_y));
         envin->set_surface(make_surface<Cylinder>(0.5 * ap_x));
-        envin->set_front_optical_properties(this->optics_env_in);
-        envin->set_back_optical_properties(this->optics_env_in);
+        envin->set_optical_property_set(optics_env_in);
         envin->enable();
         this->envelope.push_back(envin);
         sts = this->add_element(envin);
@@ -493,10 +492,10 @@ namespace SolTrace::Data
         // here at the cost of repeating ourselves.
 
         // Set aim point
-        Vector3d z_axis_ref, y_axis_ref;
+        glm::dvec3 z_axis_ref, y_axis_ref;
         this->convert_global_to_reference(z_axis_ref, this->neutral_normal);
         this->convert_global_to_reference(y_axis_ref, this->rotation_axis);
-        vector_add(1000.0, z_axis_ref, 1.0, this->origin, this->aim);
+        this->aim = 1000.0 * z_axis_ref + 1.0 * this->origin;
 
         // Set z-rotation
         double beta = asin(z_axis_ref[1]);
@@ -522,41 +521,39 @@ namespace SolTrace::Data
 
         // Sun position projected into rotation plane and converted
         // to LinearFresnel object coordinates
-        Vector3d sun_pos, sun_proj_local;
+        glm::dvec3 sun_pos, sun_proj_local;
         sun_position_vector_degrees(sun_pos, azimuth, elevation);
         this->convert_vector_global_to_local(sun_proj_local, sun_pos);
         // Project to rotation plane
         sun_proj_local[1] = 0.0;
-        sun_proj_local.make_unit();
+        sun_proj_local = glm::normalize(sun_proj_local);
 
         // std::cout << "Sun Position: " << sun_pos
         //           << "\nSun Proj Local: " << sun_proj_local
         //           << std::endl;
 
         // Set aimpoint for mirrors
-        Vector3d aim_mirror_ref;
+        glm::dvec3 aim_mirror_ref;
         // Absorber position projected into the plane of rotation (the xz-plane)
-        Vector3d origin_abs_proj(0.0,
+        glm::dvec3 origin_abs_proj(0.0,
                                  0.0,
                                  this->receiver_height);
         // origin_abs_proj.make_unit();
-        for (auto iter : this->mirrors)
+        for (auto& iter : this->mirrors)
         {
             // Get mirror to to receiver vector
-            vector_add(1.0, origin_abs_proj,
-                       -1.0, iter->get_origin_ref(),
-                       aim_mirror_ref);
+            aim_mirror_ref = origin_abs_proj - iter->get_origin_ref();
 
             // Project onto the rotation plane
             aim_mirror_ref[1] = 0.0;
-            aim_mirror_ref.make_unit();
+            aim_mirror_ref = glm::normalize(aim_mirror_ref);
             // std::cout << "Origin: " << iter->get_origin_ref()
             //           << "\nMirror to Receiver: " << aim_mirror_ref
             //           << std::endl;
 
             // Take bisector vector with the sun
-            vector_add(1.0, sun_proj_local, 1.0, aim_mirror_ref);
-            aim_mirror_ref.make_unit();
+            aim_mirror_ref = sun_proj_local + aim_mirror_ref;
+            aim_mirror_ref = glm::normalize(aim_mirror_ref);
             // std::cout << "Sun Proj Local: " << sun_proj_local
             //           << "\nAim Mirror Ref: " << aim_mirror_ref
             //           << std::endl;
@@ -571,12 +568,12 @@ namespace SolTrace::Data
             if (theta < this->tracking_limit_lower)
             {
                 theta = this->tracking_limit_lower * D2R;
-                aim_mirror_ref.set_values(sin(theta), 0.0, cos(theta));
+                aim_mirror_ref = {sin(theta), 0.0, cos(theta)};
             }
             else if (theta > this->tracking_limit_upper)
             {
                 theta = this->tracking_limit_upper * D2R;
-                aim_mirror_ref.set_values(sin(theta), 0.0, cos(theta));
+                aim_mirror_ref = {sin(theta), 0.0, cos(theta)};
             }
 
             // std::cout << "Theta 2: " << theta * R2D
@@ -584,7 +581,7 @@ namespace SolTrace::Data
             //           << std::endl;
 
             // Add origin of mirror
-            vector_add(1.0, iter->get_origin_ref(), 1000.0, aim_mirror_ref);
+            aim_mirror_ref = iter->get_origin_ref() + 1000.0 * aim_mirror_ref;
             // aim_mirror_ref.scalar_mult(1000.0);
 
             // Set aim point

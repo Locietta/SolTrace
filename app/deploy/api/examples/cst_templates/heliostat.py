@@ -127,7 +127,7 @@ class heliostat:
 
         if self.canting_method == 'off-axis':
             # Off-axis canting calculations that are not dependent on specific panel
-            sun_vec = sun_vector(self.offaxis_canting_sun_position[0], self.offaxis_canting_sun_position[1])
+            sun_vec = sun_vector(self.offaxis_canting_sun_position[0], 90.0 - self.offaxis_canting_sun_position[1]) # TODO: zenith and elevation is mixed up.
             helio2aim = (self.aim_point - self.position).unitize()
             tracking = (helio2aim + sun_vec).unitize()                  # Heliostat tracking vector (i.e., normal)
 
@@ -848,7 +848,7 @@ if __name__ == "__main__":
         PT.stages.clear()
         PT.add_stage()
         # Set-up the heliostat
-        offaxis_canting_sun_position = (180., 0.0)
+        offaxis_canting_sun_position = (180.0, 90.0)
         aim_point = position + Point(0.0, -100.0, 0.0)  # Straight south
         helio = heliostat(position, aperture_size, number_panels, gaps, focal_length, aim_point, offaxis_canting_sun_position=offaxis_canting_sun_position)
         helio.create_geometry(PT, mirror_optic)
@@ -939,11 +939,11 @@ if __name__ == "__main__":
         PT.add_stage()
         # Set-up the heliostat
         position = Point(50.0, 50.0, 5.0)  # at a 45 degree from target
-        offaxis_canting_sun_position = (135., 0.0)
+        offaxis_canting_sun_position = (135., 90.0)
         aim_point = Point(0.0, 0.0, 5.0)
         helio = heliostat(position, aperture_size, number_panels, gaps, focal_length, aim_point, offaxis_canting_sun_position=offaxis_canting_sun_position)
         helio.create_geometry(PT, mirror_optic)
-        helio.update_geometry(PT, offaxis_canting_sun_position[0], offaxis_canting_sun_position[1])
+        helio.update_geometry(PT, offaxis_canting_sun_position[0], 90.0 - offaxis_canting_sun_position[1])
 
         # Create target - additional stage
         stage = PT.add_stage()

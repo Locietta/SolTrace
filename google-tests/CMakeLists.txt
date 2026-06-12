@@ -23,6 +23,8 @@ file(GLOB GROUND_FILES ./ground_results/*.csv)
 file(COPY ${SAMPLE_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${GROUND_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/round_robin_study" DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 if(SOLTRACE_BUILD_CORETRACE)
 
 	include_directories(
@@ -32,6 +34,7 @@ if(SOLTRACE_BUILD_CORETRACE)
 		../coretrace/strace
 		../app/deploy/samples
 		../coretrace/simulation_data
+		../coretrace/simulation_results
 	)
 
 	file(GLOB SOLTRACE_EXAMPLE_TESTS soltrace_example_tests/*.cpp)

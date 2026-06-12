@@ -52,6 +52,8 @@
 #include "procs.h"
 #include "stapi.h"
 #include "mtrand.h"
+#include "simdata_bridge.h"
+#include "simulation_data/simulation_data.hpp"
 
 #define SYSTEM(p,r) TSystem *sys = reinterpret_cast<TSystem*>(p); if(!sys) return r;
 #define SYSTEM_NR(p) TSystem *sys = reinterpret_cast<TSystem*>(p); if(!sys) return;
@@ -750,6 +752,56 @@ STCORE_API int st_sim_run_with_refactor(st_context_t pcxt, unsigned int seed,
 	bool use_refactor_trace)
 {
 	return st_sim_run_data(pcxt, seed, 0, 0, false, callback, cbdata, use_refactor_trace);
+}
+
+STCORE_API int st_sim_run_SolTrace20(st_context_t pcxt, unsigned int seed, const st_runner_type_t runner_type, 
+	const char** error_msg, const char* file_name, int nthreads)
+{
+	SYSTEM(pcxt, -1);
+	if (!InitGeometries(sys))
+		return -1;
+
+	// Convert TSystem to SimulationData
+	SolTrace::Data::SimulationData sd = SolTrace::Data::SimulationData();
+	int err = convert_tsystem_to_sim_data(sys, seed, sd);
+
+	if (err != 0)
+	{
+		sys->errlog("caught exception conversion");
+		*error_msg = get_error_message(err);
+		return -1;
+	}
+		
+
+	// Run
+	switch (runner_type)
+	{
+		// Legacy (wrong call)
+		case(ST_RUNNER_LEGACY):
+			return -1;
+		// Native runner
+		case(ST_RUNNER_NATIVE):
+			run_native_runner(sd, sys, nthreads);
+			break;
+		// Native runner direct file
+		case(ST_RUNNER_NATIVE_FILE):
+			run_native_file_runner(sys, file_name, nthreads);
+			break;
+		// Optix runner
+		case(ST_RUNNER_OPTIX):
+			run_optix_runner(sd, sys);
+			break;
+		// Embree
+		case(ST_RUNNER_EMBREE):
+			run_embree_runner(sd, sys, nthreads);
+			break;
+		default:
+			return -1;
+	}
+
+	int count_raydata = sys->AllRayData.Count();
+
+	return count_raydata;
 }
 
 STCORE_API void st_calc_euler_angles( double origin[3], double aimpoint[3], double zrot, double euler[3] )

@@ -1,4 +1,3 @@
-
 /*******************************************************************************************************
 *  Copyright 2018 Alliance for Sustainable Energy, LLC
 *
@@ -53,6 +52,7 @@
 
 #include <wx/wx.h>
 #include <wx/panel.h>
+#include <wx/radiobox.h>
 
 #include "project.h"
 
@@ -64,6 +64,10 @@ int RunTraceMultiThreaded( Project *System, int nrays, int nmaxrays,
 						int nmaxthreads, int *seed, bool sunshape, bool opterrs, bool aspowertower,
 						wxArrayString &errors, bool is_cmd=false );
 
+int RunSolTrace20(Project* System, int nrays, int nmaxrays,
+	int nmaxthreads, int* seed, bool sunshape, bool opterrs, bool aspowertower,
+	wxArrayString& errors, int runner_type);
+
 class TraceForm : public wxPanel
 {
 	Project &m_prj;
@@ -74,9 +78,11 @@ public:
 	void UpdateFromData();
 
 	void SetOptions( size_t nrays, size_t nmaxsunrays, int ncpu, int seed,
-		bool sunshape, bool opterr, bool aspowertower, bool use_refactor_trace );
+		bool sunshape, bool opterr, bool aspowertower, bool use_refactor_trace,
+		int runner_type);
 	void GetOptions( size_t *nrays, size_t *nmaxsunrays, int *ncpu, int *seed,
-		bool *sunshape, bool *opterr, bool *aspowertower, bool *use_refactor_trace );
+		bool *sunshape, bool *opterr, bool *aspowertower, bool *use_refactor_trace,
+		int *runner_type);
 
 	void SetWorkDir( const wxString &path );
 	wxString GetWorkDir();
@@ -95,6 +101,7 @@ private:
 	wxCheckBox *m_inclSunShape, *m_inclOpticalErrors, *m_asPowerTower;
 	wxExtTextCtrl *m_workDir;
 	wxCheckBox *m_use_refactor_trace;
+	wxRadioBox *m_runner_choice;
 
 	int m_lastSeedVal;
 	wxNumericCtrl *m_elapsedTime, *m_lastSeed;

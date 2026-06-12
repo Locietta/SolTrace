@@ -29,7 +29,8 @@ namespace SolTrace::Data
          * @brief Default constructor for composite element
          */
         CompositeElement();
-        CompositeElement(const nlohmann::ordered_json& jnode);
+        CompositeElement(const nlohmann::ordered_json& jnode,
+            const OpticalPropertySetResolver& resolve_optics);
         virtual ~CompositeElement();
 
         /**
@@ -108,52 +109,30 @@ namespace SolTrace::Data
         virtual void set_surface(surface_ptr) override {}
 
         /**
-         * @brief Get front optical properties (always null for composite elements)
+         * @brief Get optical propertiy set id (always undefined for composite elements)
+         * @return unassigned id (composite elements don't have optical properties)
+         */
+        virtual optics_id get_optical_property_set_id() const override
+        {
+            return OPTICS_ID_UNASSIGNED;
+        }
+
+        /**
+         * @brief Get optical propertiy set pointer
          * @return nullptr (composite elements don't have optical properties)
          */
-        virtual const OpticalProperties *get_front_optical_properties() const override
+        virtual std::shared_ptr<const OpticalPropertySet> get_optical_property_set() const
         {
             return nullptr;
         }
 
         /**
-         * @brief Get front optical properties (always null for composite elements)
-         * @return nullptr (composite elements don't have optical properties)
+         * @brief Set optical propertiy set id (does not apply for composite elements)
          */
-        virtual OpticalProperties *get_front_optical_properties() override
+        virtual void set_optical_property_set(const OpticalPropertySetReference&) override 
         {
-            return nullptr;
+            assert(false && "CompositeElement does not support optical property sets");
         }
-
-        /**
-         * @brief Set front optical properties (no-op for composite elements)
-         * @param op Ignored for composite elements
-         */
-        virtual void set_front_optical_properties(const OpticalProperties &) override {}
-
-        /**
-         * @brief Get back optical properties (always null for composite elements)
-         * @return nullptr (composite elements don't have optical properties)
-         */
-        virtual const OpticalProperties *get_back_optical_properties() const override
-        {
-            return nullptr;
-        }
-
-        /**
-         * @brief Get back optical properties (always null for composite elements)
-         * @return nullptr (composite elements don't have optical properties)
-         */
-        virtual OpticalProperties *get_back_optical_properties() override
-        {
-            return nullptr;
-        }
-
-        /**
-         * @brief Set back optical properties (no-op for composite elements)
-         * @param op Ignored for composite elements
-         */
-        virtual void set_back_optical_properties(const OpticalProperties &) override {};
 
         // CompositeElement accessors
         /**

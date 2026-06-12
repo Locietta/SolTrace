@@ -34,16 +34,16 @@ void SetupPTOptimizations(TSystem *System,
                           const bool AsPowerTower,
                           st_hash_tree &sun_hash,
                           st_hash_tree &rec_hash,
-                          double (&reccm_helio)[3]);
+                          glm::dvec3 &reccm_helio);
 
 uint_fast64_t GetPTElements(const bool AsPowerTower,
                             const tstage_ptr Stage,
                             const int i,
-                            const bool in_multi_hit_loop, 
-                            const double (&PosRayStage)[3],
-                            const double (&reccm_helio)[3], 
+                            const bool in_multi_hit_loop,
+                            const glm::dvec3 &PosRayStage,
+                            const glm::dvec3 &reccm_helio,
                             st_hash_tree *rec_hash,
-                            const std::vector<void *> &sunint_elements,
+                            const std::vector<void *> &suntint_elements,
                             std::vector<void *> &reflint_elements,
                             bool &has_elements);
 

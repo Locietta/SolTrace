@@ -1,6 +1,7 @@
 #include "simulation_data.hpp"
 
 #include <cassert>
+#include <sstream>
 
 #include "composite_element.hpp"
 #include "simdata_io.hpp"
@@ -9,7 +10,8 @@ namespace SolTrace::Data {
 
 SimulationData::SimulationData() : number_of_elements(0),
                                    my_elements(1),
-                                   my_sources(0)
+                                   my_sources(0),
+                                   my_optical_property_sets(0)
 {
     return;
 }
@@ -232,6 +234,54 @@ uint_fast64_t SimulationData::remove_subelements(element_ptr el)
     return retval;
 }
 
+OpticalPropertySetReference SimulationData::add_optical_property_set(const OpticalPropertySet& opt_set)
+{
+    std::shared_ptr<OpticalPropertySet> ptr = std::make_shared<OpticalPropertySet>(opt_set);
+    const optics_id id = this->my_optical_property_sets.add_item(ptr);
+    return { id, ptr };
+}
+
+OpticalPropertySetReference SimulationData::find_or_add_optical_property_set(const OpticalPropertySet& opt_set)
+{
+    // Check if set already exists
+    for (auto it = this->get_optics_iterator(); !this->is_optics_at_end(it); ++it)
+    {
+        const OpticalPropertySet& existing = *it->second;
+        if (existing == opt_set)
+        {
+            const optics_id id = it->first;
+            auto ptr = it->second;
+            return { id, ptr };
+
+        }
+    }
+
+    // Add if it doesn't exist
+    return add_optical_property_set(opt_set);
+}
+
+const OpticalPropertySet* SimulationData::get_optical_property_set(const Element& el) const
+{
+    return get_optical_property_set(el.get_optical_property_set_id());
+}
+
+OpticalPropertySet* SimulationData::get_mutable_optical_property_set(const Element& el)
+{
+    return this->get_optical_property_set(el.get_optical_property_set_id());
+}
+
+const OpticalPropertySet* SimulationData::get_optical_property_set(optics_id id) const
+{
+    auto ptr = this->my_optical_property_sets.get_item(id);
+    return ptr == nullptr ? nullptr : ptr.get();
+}
+
+OpticalPropertySet* SimulationData::get_optical_property_set(optics_id id)
+{
+    auto ptr = this->my_optical_property_sets.get_item(id);
+    return ptr == nullptr ? nullptr : ptr.get();
+}
+
 int SimulationData::update_simulation_positions()
 {
     int sts = 0;
@@ -282,6 +332,8 @@ void SimulationData::clear(bool reset_parameters)
     this->my_elements.clear();
     this->my_sources.clear();
     this->number_of_elements = 0;
+
+    this->my_optical_property_sets.reset(0);
 
     if (reset_parameters)
         this->my_parameters = SimulationParameters();   // Reset

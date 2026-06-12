@@ -64,12 +64,17 @@ TEST(SimulationData, AddProperlyConfiguredElementsSucceeds)
 {
     SimulationData my_sim;
 
+    // Make dummy optical properties
+    OpticalPropertySet dummy_optics;
+    auto optics_ref = my_sim.add_optical_property_set(dummy_optics);
+
     // Create a properly configured SingleElement
     auto configured_single = SolTrace::Data::make_element<SingleElement>();
     auto aperture = SolTrace::Data::make_aperture<SolTrace::Data::Rectangle>(1.0, 1.0);
     auto surface = SolTrace::Data::make_surface<SolTrace::Data::Flat>();
     configured_single->set_aperture(aperture);
     configured_single->set_surface(surface);
+    configured_single->set_optical_property_set(optics_ref);
 
     // Adding a properly configured element should succeed
     EXPECT_NO_THROW(my_sim.add_element(configured_single));
@@ -83,6 +88,7 @@ TEST(SimulationData, AddProperlyConfiguredElementsSucceeds)
     auto surface2 = SolTrace::Data::make_surface<SolTrace::Data::Flat>();
     configured_sub1->set_aperture(aperture2);
     configured_sub1->set_surface(surface2);
+    configured_sub1->set_optical_property_set(optics_ref);
     configured_composite->add_element(configured_sub1);
 
     // Adding a properly configured composite should succeed
@@ -97,7 +103,7 @@ TEST(SimulationData, ValidationErrorPreservesSimulationState)
     SimulationData my_sim;
 
     // Add a properly configured element first
-    auto good_element = make_configured_element();
+    auto good_element = make_configured_element(my_sim);
     my_sim.add_element(good_element);
 
     EXPECT_EQ(my_sim.get_number_of_elements(), 1);
@@ -119,14 +125,14 @@ TEST(SimulationData, AddRemoveGetElements)
 {
     SimulationData my_sim;
 
-    auto my_reflector = make_configured_element();
+    auto my_reflector = make_configured_element(my_sim);
     auto id1 = my_sim.add_element(my_reflector);
     EXPECT_EQ(id1, my_reflector->get_id());
     EXPECT_EQ(my_sim.get_number_of_elements(), 1);
 
     auto my_comp = SolTrace::Data::make_element<CompositeElement>();
-    auto sub1 = make_configured_element();
-    auto sub2 = make_configured_element();
+    auto sub1 = make_configured_element(my_sim);
+    auto sub2 = make_configured_element(my_sim);
     my_comp->add_element(sub1);
     my_comp->add_element(sub2);
     EXPECT_EQ(my_comp->get_number_of_elements(), 2);
@@ -166,22 +172,23 @@ TEST(SimulationData, AddRemoveGetElements)
 
 TEST(SimulationData, ReplaceElement)
 {
-    auto el1 = make_configured_element();
-    auto el2 = make_configured_element();
+    SimulationData my_sim;
+
+    auto el1 = make_configured_element(my_sim);
+    auto el2 = make_configured_element(my_sim);
     auto cmp1 = SolTrace::Data::make_element<CompositeElement>();
-    auto sub1 = make_configured_element();
-    auto sub2 = make_configured_element();
+    auto sub1 = make_configured_element(my_sim);
+    auto sub2 = make_configured_element(my_sim);
     cmp1->add_element(sub1);
     cmp1->add_element(sub2);
     auto cmp2 = SolTrace::Data::make_element<CompositeElement>();
-    auto sub3 = make_configured_element();
-    auto sub4 = make_configured_element();
-    auto sub5 = make_configured_element();
+    auto sub3 = make_configured_element(my_sim);
+    auto sub4 = make_configured_element(my_sim);
+    auto sub5 = make_configured_element(my_sim);
     cmp2->add_element(sub3);
     cmp2->add_element(sub4);
     cmp2->add_element(sub5);
 
-    SimulationData my_sim;
     auto id1 = my_sim.add_element(el1);
     auto id2 = my_sim.add_element(cmp1);
     EXPECT_EQ(my_sim.get_number_of_elements(), 3);
@@ -226,22 +233,23 @@ TEST(SimulationData, ReplaceElement)
 
 TEST(SimulationData, IteratorElement)
 {
-    auto el1 = make_configured_element();
-    auto el2 = make_configured_element();
+    SimulationData my_sim;
+
+    auto el1 = make_configured_element(my_sim);
+    auto el2 = make_configured_element(my_sim);
     auto cmp1 = SolTrace::Data::make_element<CompositeElement>();
-    auto sub1 = make_configured_element();
-    auto sub2 = make_configured_element();
+    auto sub1 = make_configured_element(my_sim);
+    auto sub2 = make_configured_element(my_sim);
     cmp1->add_element(sub1);
     cmp1->add_element(sub2);
     auto cmp2 = SolTrace::Data::make_element<CompositeElement>();
-    auto sub3 = make_configured_element();
-    auto sub4 = make_configured_element();
-    auto sub5 = make_configured_element();
+    auto sub3 = make_configured_element(my_sim);
+    auto sub4 = make_configured_element(my_sim);
+    auto sub5 = make_configured_element(my_sim);
     cmp2->add_element(sub3);
     cmp2->add_element(sub4);
     cmp2->add_element(sub5);
 
-    SimulationData my_sim;
     my_sim.add_element(el1);
     my_sim.add_element(el2);
     my_sim.add_element(cmp1);

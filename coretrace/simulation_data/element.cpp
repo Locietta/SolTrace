@@ -4,6 +4,12 @@
 #include <math.h>
 
 #include "constants.hpp"
+#include "json_helpers.hpp"
+#include "matvec.hpp"
+
+#define GLM_ENABLE_EXPERIMENTAL 1
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/io.hpp>
 
 namespace SolTrace::Data {
 
@@ -19,12 +25,12 @@ ElementBase::ElementBase() : Element(),
                              reference_element(nullptr)
 {
     // Default local coordinates to match with the reference coordinates
-    this->aim.set_values(0.0, 0.0, 1.0);
-    this->origin.zero();
+    this->aim = {0.0, 0.0, 1.0};
+    this->origin = glm::dvec3(0.0);
 
-    this->euler_angles.zero();
-    this->reference_to_local.identity();
-    this->local_to_reference.identity();
+    this->euler_angles = glm::dvec3(0.0);
+    this->reference_to_local = glm::identity<glm::dmat3>();
+    this->local_to_reference = glm::identity<glm::dmat3>();
 
     return;
 }
@@ -47,11 +53,11 @@ ElementBase::ElementBase(const nlohmann::ordered_json& jnode) : ElementBase()
     this->set_name(jnode.at("my_name"));
 
     std::array<double, 3> orig_arr = jnode.at("origin").get<std::array<double, 3>>();
-    Vector3d orig_vec(orig_arr.data());
+    glm::dvec3 orig_vec = from_array(orig_arr);
     this->set_origin(orig_vec);
 
     std::array<double, 3> aim_arr = jnode.at("aim").get<std::array<double, 3>>();
-    Vector3d aim_vec(aim_arr.data());
+    glm::dvec3 aim_vec = from_array(aim_arr);
     this->set_aim_vector(aim_vec);
 
     this->set_zrot(jnode.at("zrot"));
@@ -76,14 +82,14 @@ ElementBase::~ElementBase()
 //     return empty_container.get_const_iterator();
 // }
 
-Vector3d ElementBase::get_origin_stage() const
+glm::dvec3 ElementBase::get_origin_stage() const
 {
-    Vector3d origin_stage;
+    glm::dvec3 origin_stage;
     auto ref_el = this->reference_element;
     if (this->is_stage())
     {
         // This is the stage element so the stage origin is zero.
-        origin_stage.zero();
+        origin_stage = glm::dvec3(0.0);
     }
     else if (ref_el == nullptr)
     {
@@ -98,9 +104,9 @@ Vector3d ElementBase::get_origin_stage() const
     return origin_stage;
 }
 
-Vector3d ElementBase::get_origin_global() const
+glm::dvec3 ElementBase::get_origin_global() const
 {
-    Vector3d origin_global;
+    glm::dvec3 origin_global;
     auto ref_el = this->reference_element;
     if (ref_el == nullptr)
     {
@@ -113,9 +119,9 @@ Vector3d ElementBase::get_origin_global() const
     return origin_global;
 }
 
-Vector3d ElementBase::get_aim_vector_stage() const
+glm::dvec3 ElementBase::get_aim_vector_stage() const
 {
-    Vector3d aim_stage;
+    glm::dvec3 aim_stage;
     if (this->reference_element == nullptr)
     {
         aim_stage = this->aim;
@@ -128,9 +134,9 @@ Vector3d ElementBase::get_aim_vector_stage() const
     return aim_stage;
 }
 
-Vector3d ElementBase::get_aim_vector_global() const
+glm::dvec3 ElementBase::get_aim_vector_global() const
 {
-    Vector3d aim_global;
+    glm::dvec3 aim_global;
     if (this->reference_element == nullptr)
     {
         aim_global = this->aim;
@@ -143,20 +149,20 @@ Vector3d ElementBase::get_aim_vector_global() const
     return aim_global;
 }
 
-Matrix3d ElementBase::get_reference_to_local() const
+glm::dmat3 ElementBase::get_reference_to_local() const
 {
     return this->reference_to_local;
 }
 
-Matrix3d ElementBase::get_stage_to_local() const
+glm::dmat3 ElementBase::get_stage_to_local() const
 {
-    Matrix3d stage_to_local;
+    glm::dmat3 stage_to_local = glm::dmat3(0.0);
     if (this->is_stage())
     {
         // stage_to_local.set_value(0, 0, 1.0);
         // stage_to_local.set_value(1, 1, 1.0);
         // stage_to_local.set_value(2, 2, 1.0);
-        stage_to_local.identity();
+        stage_to_local = glm::identity<glm::dmat3>();
     }
     else if (this->reference_element == nullptr)
     {
@@ -164,40 +170,35 @@ Matrix3d ElementBase::get_stage_to_local() const
     }
     else
     {
-        Matrix3d R = this->reference_element->get_stage_to_local();
-        matrix_matrix_product(this->reference_to_local, R, stage_to_local);
+        glm::dmat3 R = this->reference_element->get_stage_to_local();
+        stage_to_local = this->reference_to_local * R;
     }
     return stage_to_local;
 }
 
-Matrix3d ElementBase::get_global_to_local() const
+glm::dmat3 ElementBase::get_global_to_local() const
 {
-    Matrix3d global_to_local;
-    if (this->reference_element == nullptr)
-    {
+    glm::dmat3 global_to_local = glm::dmat3(0.0);
+    if (this->reference_element == nullptr) {
         global_to_local = this->reference_to_local;
-    }
-    else
-    {
-        Matrix3d R = this->reference_element->get_global_to_local();
-        matrix_matrix_product(this->reference_to_local, R, global_to_local);
+    } else {
+        glm::dmat3 R = this->reference_element->get_global_to_local();
+        global_to_local = this->reference_to_local * R;
     }
     return global_to_local;
 }
 
-Matrix3d ElementBase::get_local_to_reference() const
+glm::dmat3 ElementBase::get_local_to_reference() const
 {
     return this->local_to_reference;
 }
 
-Matrix3d ElementBase::get_local_to_stage() const
+glm::dmat3 ElementBase::get_local_to_stage() const
 {
-    Matrix3d local_to_stage;
+    glm::dmat3 local_to_stage = glm::dmat3(0.0);
     if (this->is_stage())
     {
-        local_to_stage.set_value(0, 0, 1.0);
-        local_to_stage.set_value(1, 1, 1.0);
-        local_to_stage.set_value(2, 2, 1.0);
+        local_to_stage = glm::identity<glm::dmat3>();
     }
     else if (this->reference_element == nullptr)
     {
@@ -205,23 +206,23 @@ Matrix3d ElementBase::get_local_to_stage() const
     }
     else
     {
-        Matrix3d R = this->reference_element->get_local_to_stage();
-        matrix_matrix_product(R, this->local_to_reference, local_to_stage);
+        glm::dmat3 R = this->reference_element->get_local_to_stage();
+        local_to_stage = R * this->local_to_reference;
     }
     return local_to_stage;
 }
 
-Matrix3d ElementBase::get_local_to_global() const
+glm::dmat3 ElementBase::get_local_to_global() const
 {
-    Matrix3d local_to_global;
+    glm::dmat3 local_to_global = glm::dmat3(0.0);
     if (this->reference_element == nullptr)
     {
         local_to_global = this->local_to_reference;
     }
     else
     {
-        Matrix3d R = this->reference_element->get_local_to_global();
-        matrix_matrix_product(R, this->local_to_reference, local_to_global);
+        glm::dmat3 R = this->reference_element->get_local_to_global();
+        local_to_global = R * this->local_to_reference;
     }
     return local_to_global;
 }
@@ -232,15 +233,13 @@ int ElementBase::compute_coordinate_rotations()
 
     if (!this->coordinates_initialized)
     {
-        Vector3d dr;
-        vector_add(1.0, this->aim, -1.0, this->origin, dr);
-        make_unit_vector(dr);
+        glm::dvec3 dr = glm::normalize(this->aim - this->origin);
 
         this->euler_angles[0] = atan2(dr[0], dr[2]);
         this->euler_angles[1] = asin(dr[1]);
         this->euler_angles[2] = this->zrot * D2R;
 
-        compute_transform_matrices(this->euler_angles,
+        CalculateTransformMatrices(this->euler_angles,
                                    this->reference_to_local,
                                    this->local_to_reference);
 
@@ -250,8 +249,8 @@ int ElementBase::compute_coordinate_rotations()
     return sts;
 }
 
-int ElementBase::set_reference_frame_geometry(const Vector3d &origin,
-                                              const Vector3d &aim,
+int ElementBase::set_reference_frame_geometry(const glm::dvec3 &origin,
+                                              const glm::dvec3 &aim,
                                               double zrot)
 {
     this->coordinates_initialized = false;
@@ -261,17 +260,16 @@ int ElementBase::set_reference_frame_geometry(const Vector3d &origin,
     return this->compute_coordinate_rotations();
 }
 
-int ElementBase::convert_reference_to_local(Vector3d &local,
-                                            const Vector3d &ref)
+int ElementBase::convert_reference_to_local(glm::dvec3 &local,
+                                            const glm::dvec3 &ref)
 {
-    Vector3d temp;
-    vector_add(1.0, ref, -1.0, this->origin, temp);
-    matrix_vector_product(this->reference_to_local, temp, local);
+    glm::dvec3 temp = ref - this->origin;
+    local = this->reference_to_local * temp;
     return 0;
 }
 
-int ElementBase::convert_stage_to_local(Vector3d &local,
-                                        const Vector3d &stage)
+int ElementBase::convert_stage_to_local(glm::dvec3 &local,
+                                        const glm::dvec3 &stage)
 {
     if (this->is_stage())
     {
@@ -287,15 +285,15 @@ int ElementBase::convert_stage_to_local(Vector3d &local,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->reference_element->convert_stage_to_local(ref, stage);
         convert_reference_to_local(local, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_global_to_local(Vector3d &local,
-                                         const Vector3d &global)
+int ElementBase::convert_global_to_local(glm::dvec3 &local,
+                                         const glm::dvec3 &global)
 {
     auto ref_el = this->reference_element;
     if (ref_el == nullptr)
@@ -305,24 +303,23 @@ int ElementBase::convert_global_to_local(Vector3d &local,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         ref_el->convert_global_to_local(ref, global);
         this->convert_reference_to_local(local, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_local_to_reference(Vector3d &ref,
-                                            const Vector3d &local)
+int ElementBase::convert_local_to_reference(glm::dvec3 &ref,
+                                            const glm::dvec3 &local)
 {
-    Vector3d temp;
-    matrix_vector_product(this->local_to_reference, local, temp);
-    vector_add(1.0, temp, 1.0, this->origin, ref);
+    glm::dvec3 temp = this->local_to_reference * local;
+    ref = temp + this->origin;
     return 0;
 }
 
-int ElementBase::convert_local_to_stage(Vector3d &stage,
-                                        const Vector3d &local)
+int ElementBase::convert_local_to_stage(glm::dvec3 &stage,
+                                        const glm::dvec3 &local)
 {
     if (this->is_stage())
     {
@@ -339,15 +336,15 @@ int ElementBase::convert_local_to_stage(Vector3d &stage,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->convert_local_to_reference(ref, local);
         this->reference_element->convert_local_to_stage(stage, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_local_to_global(Vector3d &global,
-                                         const Vector3d &local)
+int ElementBase::convert_local_to_global(glm::dvec3 &global,
+                                         const glm::dvec3 &local)
 {
     auto ref_el = this->reference_element;
     if (ref_el == nullptr)
@@ -356,15 +353,15 @@ int ElementBase::convert_local_to_global(Vector3d &global,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->convert_local_to_reference(ref, local);
         ref_el->convert_local_to_global(global, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_global_to_reference(Vector3d &ref,
-                                             const Vector3d &global)
+int ElementBase::convert_global_to_reference(glm::dvec3 &ref,
+                                             const glm::dvec3 &global)
 {
     if (this->reference_element == nullptr)
     {
@@ -377,8 +374,8 @@ int ElementBase::convert_global_to_reference(Vector3d &ref,
     }
 }
 
-int ElementBase::convert_reference_to_global(Vector3d &global,
-                                             const Vector3d &ref)
+int ElementBase::convert_reference_to_global(glm::dvec3 &global,
+                                             const glm::dvec3 &ref)
 {
     if (this->reference_element == nullptr)
     {
@@ -391,15 +388,15 @@ int ElementBase::convert_reference_to_global(Vector3d &global,
     }
 }
 
-int ElementBase::convert_vector_reference_to_local(Vector3d &local,
-                                                   const Vector3d &ref)
+int ElementBase::convert_vector_reference_to_local(glm::dvec3 &local,
+                                                   const glm::dvec3 &ref)
 {
-    matrix_vector_product(this->reference_to_local, ref, local);
+    local = this->reference_to_local * ref;
     return 0;
 }
 
-int ElementBase::convert_vector_stage_to_local(Vector3d &local,
-                                               const Vector3d &stage)
+int ElementBase::convert_vector_stage_to_local(glm::dvec3 &local,
+                                               const glm::dvec3 &stage)
 {
     if (this->is_stage())
     {
@@ -415,15 +412,15 @@ int ElementBase::convert_vector_stage_to_local(Vector3d &local,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->reference_element->convert_vector_stage_to_local(ref, stage);
         convert_vector_reference_to_local(local, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_vector_global_to_local(Vector3d &local,
-                                                const Vector3d &global)
+int ElementBase::convert_vector_global_to_local(glm::dvec3 &local,
+                                                const glm::dvec3 &global)
 {
     auto ref_el = this->reference_element;
     if (ref_el == nullptr)
@@ -433,22 +430,22 @@ int ElementBase::convert_vector_global_to_local(Vector3d &local,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         ref_el->convert_vector_global_to_local(ref, global);
         this->convert_vector_reference_to_local(local, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_vector_local_to_reference(Vector3d &ref,
-                                                   const Vector3d &local)
+int ElementBase::convert_vector_local_to_reference(glm::dvec3 &ref,
+                                                   const glm::dvec3 &local)
 {
-    matrix_vector_product(this->local_to_reference, local, ref);
+    ref = this->local_to_reference * local;
     return 0;
 }
 
-int ElementBase::convert_vector_local_to_stage(Vector3d &stage,
-                                               const Vector3d &local)
+int ElementBase::convert_vector_local_to_stage(glm::dvec3 &stage,
+                                               const glm::dvec3 &local)
 {
     if (this->is_stage())
     {
@@ -465,15 +462,15 @@ int ElementBase::convert_vector_local_to_stage(Vector3d &stage,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->convert_vector_local_to_reference(ref, local);
         this->reference_element->convert_vector_local_to_stage(stage, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_vector_local_to_global(Vector3d &global,
-                                                const Vector3d &local)
+int ElementBase::convert_vector_local_to_global(glm::dvec3 &global,
+                                                const glm::dvec3 &local)
 {
     auto ref_el = this->reference_element;
     if (ref_el == nullptr)
@@ -482,15 +479,15 @@ int ElementBase::convert_vector_local_to_global(Vector3d &global,
     }
     else
     {
-        Vector3d ref;
+        glm::dvec3 ref;
         this->convert_vector_local_to_reference(ref, local);
         ref_el->convert_vector_local_to_global(global, ref);
     }
     return 0;
 }
 
-int ElementBase::convert_vector_global_to_reference(Vector3d &ref,
-                                                    const Vector3d &global)
+int ElementBase::convert_vector_global_to_reference(glm::dvec3 &ref,
+                                                    const glm::dvec3 &global)
 {
     if (this->reference_element == nullptr)
     {
@@ -504,8 +501,8 @@ int ElementBase::convert_vector_global_to_reference(Vector3d &ref,
     }
 }
 
-int ElementBase::convert_vector_reference_to_global(Vector3d &global,
-                                                    const Vector3d &ref)
+int ElementBase::convert_vector_reference_to_global(glm::dvec3 &global,
+                                                    const glm::dvec3 &ref)
 {
     if (this->reference_element == nullptr)
     {
@@ -542,8 +539,8 @@ void ElementBase::write_common_json(nlohmann::ordered_json& jnode) const
     jnode["stage"] = this->stage;
     jnode["my_name"] = this->my_name;
 
-    jnode["origin"] = this->origin.data;
-    jnode["aim"] = this->aim.data;
+    jnode["origin"] = to_array(this->origin);
+    jnode["aim"] = to_array(this->aim);
     jnode["zrot"] = this->zrot;
     
     // Not including calculated values

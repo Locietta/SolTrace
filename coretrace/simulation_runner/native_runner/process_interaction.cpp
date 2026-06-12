@@ -1,4 +1,3 @@
-
 #include "process_interaction.hpp"
 
 // SimulationData headers
@@ -12,10 +11,11 @@ namespace SolTrace::NativeRunner
 
     void ProcessInteraction(
         // system info
-        TSystem *System,
-        MTRand &myrng,
+        TSystem* System,
+        MTRand& myrng,
         const bool IncludeSunShape,
-        const OpticalProperties *optics,
+        const SolTrace::Data::OpticalPropertySet* optics,
+        const bool LastHitBackSide,
         const bool IncludeErrors,
         // stage info
         const int i,
@@ -25,30 +25,27 @@ namespace SolTrace::NativeRunner
         // const int k,
         // ray info
         const uint_fast64_t MultipleHitCount,
-        double (&LastDFXYZ)[3],
+        glm::dvec3& LastDFXYZ,
         // Outputs
-        double (&LastCosRaySurfElement)[3],
-        int &ErrorFlag,
-        double (&CosRayOutElement)[3],
-        double (&LastPosRaySurfElement)[3],
-        double (&PosRayOutElement)[3])
+        glm::dvec3& LastCosRaySurfElement,
+        int& ErrorFlag,
+        glm::dvec3& CosRayOutElement,
+        glm::dvec3& LastPosRaySurfElement,
+        glm::dvec3& PosRayOutElement)
     {
         // Initialize
-        double CosIn[3] = {0.0, 0.0, 0.0};
-        double CosOut[3] = {0.0, 0.0, 0.0};
+        glm::dvec3 CosIn(0.0, 0.0, 0.0);
+        glm::dvec3 CosOut(0.0, 0.0, 0.0);
 
-        if (!Stage->Virtual)
-        {
+        if (!Stage->Virtual) {
             // change to account for first hit only in primary stage 8-11-31
-            if (IncludeSunShape && i == 0 && MultipleHitCount == 1)
-            {
+            if (IncludeSunShape && i == 0 && MultipleHitCount == 1) {
                 // Apply sunshape to UNPERTURBED ray at intersection point
                 // only apply sunshape error once for primary stage
-                CopyVec3(CosIn, LastCosRaySurfElement);
+                CosIn = LastCosRaySurfElement;
                 // sun shape
-                Errors(myrng, CosIn, 1, &System->Sun,
-                       optics, CosOut, LastDFXYZ);
-                CopyVec3(LastCosRaySurfElement, CosOut);
+                Errors(myrng, CosIn, 1, &System->Sun, optics, LastHitBackSide, CosOut, LastDFXYZ);
+                LastCosRaySurfElement = CosOut;
             }
 
             //{Determine interaction at surface and direction of perturbed ray}
@@ -56,25 +53,29 @@ namespace SolTrace::NativeRunner
 
             // {Apply surface normal errors to surface normal before interaction
             // ray at intersection point - Wendelin 11-23-09}
-            if (IncludeErrors)
-            {
-                CopyVec3(CosIn, CosRayOutElement);
+            if (IncludeErrors) {
+                CosIn = CosRayOutElement;
                 // surface normal errors
-                SurfaceNormalErrors(myrng, LastDFXYZ, optics, CosOut);
+                SurfaceNormalErrors(myrng, LastDFXYZ, optics, LastHitBackSide, CosOut);
                 // myrng_counter++;
-                CopyVec3(LastDFXYZ, CosOut);
+                LastDFXYZ = CosOut;
             }
 
-            Interaction(myrng, LastPosRaySurfElement, LastCosRaySurfElement,
-                        LastDFXYZ, // Stage->ElementList[k]->InteractionType,
-                        optics, 630.0, PosRayOutElement, CosRayOutElement,
-                        &ErrorFlag);
+            Interaction(myrng,
+                LastPosRaySurfElement,
+                LastCosRaySurfElement,
+                LastDFXYZ, // Stage->ElementList[k]->InteractionType,
+                optics,
+                LastHitBackSide,
+                630.0,
+                PosRayOutElement,
+                CosRayOutElement,
+                &ErrorFlag);
             // myrng_counter++;
 
             // {Apply specularity optical error to PERTURBED (i.e. after
             // interaction) ray at intersection point}
-            if (IncludeErrors)
-            {
+            if (IncludeErrors) {
                 // if (optics->error_distribution_type == 'F' ||
                 // 	optics->error_distribution_type == 'f')
                 // {
@@ -91,31 +92,36 @@ namespace SolTrace::NativeRunner
                 // TODO: Not sure what error distribution type 'F' is?
                 // Do we need to implement it? For now just use the 'else'
                 // clause from the above.
-                CopyVec3(CosIn, CosRayOutElement);
+                CosIn = CosRayOutElement;
 
                 // optical errors
-                Errors(myrng, CosIn, 2, &System->Sun,
-                       //    Stage->ElementList[k].get(),
-                       optics, CosOut, LastDFXYZ);
+                Errors(myrng,
+                    CosIn,
+                    2,
+                    &System->Sun,
+                    //    Stage->ElementList[k].get(),
+                    optics,
+                    LastHitBackSide,
+                    CosOut,
+                    LastDFXYZ);
                 // myrng_counter++;
-                CopyVec3(CosRayOutElement, CosOut);
+                CosRayOutElement = CosOut;
             }
         }
     }
 
     inline double sqr(double x) { return (x) * (x); }
 
-    void Interaction(
-        MTRand &myrng,
-        const double PosXYZ[3],
-        const double CosKLM[3],
-        const double DFXYZ[3],
-        // int InteractionType,
-        const OpticalProperties *Opticl,
-        double Wavelength,
-        double PosOut[3],
-        double CosOut[3],
-        int *ErrorFlag)
+    void Interaction(MTRand &myrng,
+                     const glm::dvec3 &PosXYZ,
+                     const glm::dvec3 &CosKLM,
+                     const glm::dvec3 &DFXYZ,
+                     const SolTrace::Data::OpticalPropertySet *Opticl,
+                     const bool LastHitBackSide,
+                     double Wavelength,
+                     glm::dvec3 &PosOut,
+                     glm::dvec3 &CosOut,
+                     int *ErrorFlag)
     {
         /* {Purpose: To compute the direction cosines of the ray due to optical interaction
                    at the intersection point of the ray with the surface
@@ -161,25 +167,29 @@ namespace SolTrace::NativeRunner
         }*/
 
         int i = 0;
-        double CosUVW[3] = {0.0, 0.0, 0.0};
+        glm::dvec3 CosUVW(0.0, 0.0, 0.0);
+
         int NIter = 0, IType = 0, NMord = 0;
         double Epsilon = 0.0, Refr1 = 0.0, Refr2 = 0.0, RMU = 0.0, RM2 = 0.0;
         double D2 = 0.0, B = 0.0, A = 0.0, A2 = 0.0;
         double Gamn = 0.0, Gamn1 = 0.0;
         double X = 0.0, Y = 0.0, A1 = 0.0, B1 = 0.0, Ellips = 0.0, B2 = 0.0;
         double RK = 0.0, RL = 0.0, RM = 0.0, Denom, U = 0, V = 0, W = 0;
-        double Varr = 0, GFactr = 0, Rho2 = 0.0, Rho = 0.0, Term = 0.0, G = 0.0, D = 0.0, XX = 0.0, Ordiff = 0.0, RLamda = 0.0;
+        double Varr = 0, GFactr = 0, Rho2 = 0.0, Rho = 0.0, Term = 0.0, G = 0.0, D = 0.0, XX = 0.0,
+               Ordiff = 0.0, RLamda = 0.0;
         double Rave = 0.0, Rs = 0.0, Rp = 0.0;
-        double UnitDFXYZ[3] = {0.0, 0.0, 0.0}, IncidentAngle = 0.0;
+
+        glm::dvec3 UnitDFXYZ(0.0, 0.0, 0.0);
+        double IncidentAngle = 0.0;
 
         NIter = 10;
         Epsilon = 0.000005;
 
         *ErrorFlag = 0;
-        for (i = 0; i < 3; i++)
-            PosOut[i] = PosXYZ[i];
 
-        switch (Opticl->my_type)
+        PosOut = PosXYZ;
+
+        switch (Opticl->get_interaction_type())
         {
 
             /*{  InteractionType = 1, Refraction
@@ -190,26 +200,40 @@ namespace SolTrace::NativeRunner
             // as the commented out bit immediately below.
             // Refr1 = Opticl->RefractiveIndex[0];
             // Refr2 = Opticl->RefractiveIndex[2];
-            Refr1 = Opticl->refraction_index_front;
-            Refr2 = Opticl->refraction_index_back;
+
+            double refrac_front, refrac_back;
+            Opticl->get_refraction_indices(refrac_front, refrac_back);
+
+            if (!LastHitBackSide)
+            {
+                Refr1 = refrac_front;
+                Refr2 = refrac_back;
+            }
+            else
+            {
+                Refr1 = refrac_back;
+                Refr2 = refrac_front;
+            }
+            
             RMU = Refr1 / Refr2;
-            D2 = DOT(DFXYZ, DFXYZ);
+            D2 = glm::dot(DFXYZ, DFXYZ);
             B = (RMU * RMU - 1.0) / D2;
-            A = RMU * DOT(CosKLM, DFXYZ) / D2;
+            A = RMU * glm::dot(CosKLM, DFXYZ) / D2;
             A2 = A * A;
             if (B > A2) // Total internal reflection
             {
-                A = DOT(CosKLM, DFXYZ) / DOT(DFXYZ, DFXYZ);
-                for (i = 0; i < 3; i++)
-                    CosOut[i] = CosKLM[i] - 2.0 * A * DFXYZ[i];
+                A = glm::dot(CosKLM, DFXYZ) / glm::dot(DFXYZ, DFXYZ);
+                CosOut = CosKLM - 2.0 * A * DFXYZ;
                 return;
             }
 
             // fresnel equations
-            UnitDFXYZ[0] = -DFXYZ[0] / sqrt(DOT(DFXYZ, DFXYZ)); // unit surface normals
-            UnitDFXYZ[1] = -DFXYZ[1] / sqrt(DOT(DFXYZ, DFXYZ));
-            UnitDFXYZ[2] = -DFXYZ[2] / sqrt(DOT(DFXYZ, DFXYZ));
-            IncidentAngle = acos(DOT(CosKLM, UnitDFXYZ));
+            UnitDFXYZ = -glm::normalize(DFXYZ);
+            // UnitDFXYZ[0] = -DFXYZ[0] / sqrt(glm::dot(DFXYZ, DFXYZ)); // unit surface normals
+            // UnitDFXYZ[1] = -DFXYZ[1] / sqrt(glm::dot(DFXYZ, DFXYZ));
+            // UnitDFXYZ[2] = -DFXYZ[2] / sqrt(glm::dot(DFXYZ, DFXYZ));
+
+            IncidentAngle = acos(glm::dot(CosKLM, UnitDFXYZ));
             Rs = sqr(((Refr1 * cos(IncidentAngle) - Refr2 * sqrt(1 - sqr(Refr1 * sin(IncidentAngle) / Refr2)))) /
                      ((Refr1 * cos(IncidentAngle) + Refr2 * sqrt(1 - sqr(Refr1 * sin(IncidentAngle) / Refr2)))));
             Rp = sqr(((Refr1 * sqrt(1 - sqr(Refr1 * sin(IncidentAngle) / Refr2))) - Refr2 * cos(IncidentAngle)) /
@@ -241,14 +265,16 @@ namespace SolTrace::NativeRunner
 
                 // Have converged on Gamma, Compute direction cosines of refracted ray.
                 // Label_Converge:
-                for (i = 0; i < 3; i++)
-                    CosOut[i] = RMU * CosKLM[i] + Gamn1 * DFXYZ[i];
+                CosOut = RMU * CosKLM + Gamn1 * DFXYZ;
+                // for (i = 0; i < 3; i++)
+                //     CosOut[i] = RMU * CosKLM[i] + Gamn1 * DFXYZ[i];
             }
             else // reflected from surface
             {
-                A = DOT(CosKLM, DFXYZ) / DOT(DFXYZ, DFXYZ);
-                for (i = 0; i < 3; i++)
-                    CosOut[i] = CosKLM[i] - 2.0 * A * DFXYZ[i];
+                A = glm::dot(CosKLM, DFXYZ) / glm::dot(DFXYZ, DFXYZ);
+                CosOut = CosKLM - 2.0 * A * DFXYZ;
+                // for (i = 0; i < 3; i++)
+                //     CosOut[i] = CosKLM[i] - 2.0 * A * DFXYZ[i];
             }
             return;
             break;
@@ -258,10 +284,11 @@ namespace SolTrace::NativeRunner
             ===============================================================================}*/
         case InteractionType::REFLECTION:
         {
-            A = DOT(CosKLM, DFXYZ) / DOT(DFXYZ, DFXYZ);
+            A = glm::dot(CosKLM, DFXYZ) / glm::dot(DFXYZ, DFXYZ);
             // Compute direction cosines for reflected ray
-            for (i = 0; i < 3; i++)
-                CosOut[i] = CosKLM[i] - 2.0 * A * DFXYZ[i];
+            CosOut = CosKLM - 2.0 * A * DFXYZ;
+            // for (i = 0; i < 3; i++)
+            //     CosOut[i] = CosKLM[i] - 2.0 * A * DFXYZ[i];
 
             return;
             break;

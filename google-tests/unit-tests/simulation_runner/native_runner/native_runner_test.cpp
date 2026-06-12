@@ -15,6 +15,7 @@
 #include <simulation_data_export.hpp>
 #include <simulation_result_export.hpp>
 #include <simulation_runner.hpp>
+#include <trace_logger.hpp>
 
 #include "common.hpp"
 #include "count_absorbed_native.h"
@@ -25,30 +26,6 @@ using SolTrace::NativeRunner::MTRand;
 using SolTrace::NativeRunner::NativeRunner;
 using SolTrace::NativeRunner::TRayData;
 using SolTrace::NativeRunner::TSystem;
-
-int_fast64_t count_element_event(const SimulationResult &res, element_id el, RayEvent rev)
-{
-    int_fast64_t count = 0;
-
-    for (auto ray_idx = 0;
-         ray_idx < res.get_number_of_records();
-         ++ray_idx)
-    {
-        auto rr = res[ray_idx];
-        for (auto event_idx = 0;
-             event_idx < rr->get_number_of_interactions();
-             ++event_idx)
-        {
-            if (rr->get_event(event_idx) == rev &&
-                rr->get_element(event_idx) == el)
-            {
-                ++count;
-            }
-        }
-    }
-
-    return count;
-}
 
 TEST(RandomNumberGenerator, SingleNumberMersenneTwister)
 {
@@ -63,7 +40,7 @@ TEST(NativeRunnerTypes, TSun)
 
     SimulationData my_sim;
     auto sun = SolTrace::Data::make_ray_source<Sun>();
-    Vector3d spos(1.0, 2.0, 3.0);
+    glm::dvec3 spos(1.0, 2.0, 3.0);
     sun->set_position(spos);
     sun->set_shape(SunShape::PILLBOX, -1.0, 1.0, 0.0);
     my_sim.add_ray_source(sun);
@@ -75,13 +52,13 @@ TEST(NativeRunnerTypes, TSun)
     EXPECT_EQ(sys->Sun.ShapeIndex, SunShape::PILLBOX);
 }
 
-TEST(NativeRunnerTypes, MakeElement)
-{
-}
+// TEST(NativeRunnerTypes, MakeElement)
+// {
+// }
 
-TEST(NativeRunnerTypes, MakeStage)
-{
-}
+// TEST(NativeRunnerTypes, MakeStage)
+// {
+// }
 
 // TEST(NativeRunnerTypes, TElement)
 // {
@@ -90,25 +67,25 @@ TEST(NativeRunnerTypes, MakeStage)
 //     // SimulationData my_sim;
 //     // // **** Setup Answers **** //
 //     // // Origin
-//     // Vector3d Origin1(1.0, 2.0, 3.0);
+//     // glm::dvec3 Origin1(1.0, 2.0, 3.0);
 //     // // Corresponding Euler angles in radians
 //     // const double a1 = 0.0;
 //     // const double b1 = asin(-1.0 / sqrt(3.0));
 //     // const double g1 = acos(1.0 / cos(b1) * 1.0 / sqrt(6.0)); // approximately 0.615
 //     // // Corresponding aim vector (local z-axis in reference coordinates)
-//     // Vector3d aim1(0.0, -1.0 / sqrt(3.0), sqrt(2.0 / 3.0));
+//     // glm::dvec3 aim1(0.0, -1.0 / sqrt(3.0), sqrt(2.0 / 3.0));
 //     // vector_add(1.0, Origin1, 1.0, aim1);
 
 //     // // Z-Rotation is the last of the Euler angles but in degrees
 //     // const double zrot1 = g1 * 180.0 / PI;
 
 //     // // Origin
-//     // Vector3d Origin2(-3.0, 1.0, -5.0);
+//     // glm::dvec3 Origin2(-3.0, 1.0, -5.0);
 //     // const double a2 = PI / 4.0;
 //     // const double b2 = PI / 6.0;
 //     // const double g2 = PI / 3.0;
 //     // // Corresponding aim vector (local z-axis in reference coordinates)
-//     // Vector3d aim2(sqrt(3.0 / 8.0), 0.5, sqrt(3.0 / 8.0));
+//     // glm::dvec3 aim2(sqrt(3.0 / 8.0), 0.5, sqrt(3.0 / 8.0));
 //     // vector_add(1.0, Origin2, 1.0, aim2);
 
 //     // // Z-Rotation is the last of the Euler angles but in degrees
@@ -130,14 +107,45 @@ TEST(NativeRunnerTypes, MakeStage)
 //     // TODO: Implement test
 // }
 
-TEST(ThreadManager, Logging)
+TEST(TraceLogger, Logging)
 {
-    SolTrace::NativeRunner::ThreadManager manager;
-    manager.error_log("This is a test message to test logging");
+    SolTrace::NativeRunner::TraceLogger logger;
+    logger.error_log("This is a test message to test logging");
     std::stringstream ss;
-    manager.print_log(ss);
+    logger.print_log(ss);
     EXPECT_GT(ss.str().size(), 0);
 }
+
+TEST(NativeRunner, ErrorOnUnsupportedOptions)
+{
+    NativeRunner runner;
+    SimulationData my_sim;
+
+    SimulationParameters &params = my_sim.get_simulation_parameters();
+    params.include_optical_errors = true;
+    params.include_sun_shape_errors = true;
+
+    auto sun = SolTrace::Data::make_ray_source<Sun>();
+    sun->set_position(0.0, 0.0, 100.0);
+    sun->set_shape(SolTrace::Data::SunShape::GAUSSIAN, 1.0, -5.0, 0.0);
+    my_sim.add_ray_source(sun);
+
+    auto mirror = SolTrace::Data::make_element<SingleElement>();
+    mirror->set_aperture(make_aperture<Rectangle>(10.0, 10.0));
+    mirror->set_surface(make_surface<Flat>());
+    SolTrace::Data::OpticalPropertySet mirror_optics(SolTrace::Data::InteractionType::REFLECTION, "Mirror");
+    mirror_optics.set_ideal_one_sided_reflector(SolTrace::Data::OpticalSide::Front);
+    mirror_optics.set_errors(SolTrace::Data::OpticalSide::Front, SolTrace::Data::DistributionType::UNKNOWN, 0.0, 0.0);
+    auto mirror_optics_ref = my_sim.add_optical_property_set(mirror_optics);
+    mirror->set_optical_property_set(mirror_optics_ref);
+
+    RunnerStatus sts;
+    sts = runner.initialize();
+    ASSERT_EQ(sts, RunnerStatus::SUCCESS);
+
+    EXPECT_THROW(runner.setup_simulation(&my_sim), std::invalid_argument);
+}
+
 
 TEST(NativeRunner, SmokeTest)
 {
@@ -162,20 +170,23 @@ TEST(NativeRunner, SmokeTest)
     const int NUM_ELEMENTS = 4;
     double x[NUM_ELEMENTS] = {1.0, 0.0, -1.0, 0.0};
     double y[NUM_ELEMENTS] = {0.0, 1.0, 0.0, -1.0};
-    OpticalProperties optics(SolTrace::Data::InteractionType::REFLECTION,
-                             SolTrace::Data::DistributionType::GAUSSIAN,
-                             0.0, 1.0, 0.0, 0.0, 1.0, 1.0);
+    SolTrace::Data::OpticalPropertySet mirror_optics_set(SolTrace::Data::InteractionType::REFLECTION, "SmokeTestOptics");
+    mirror_optics_set.set_ideal_reflection(SolTrace::Data::OpticalSide::Both);
+    mirror_optics_set.set_reflectivity(SolTrace::Data::OpticalSide::Front, 1.0);
+    mirror_optics_set.set_reflectivity(SolTrace::Data::OpticalSide::Back, 1.0);
+    mirror_optics_set.set_errors(SolTrace::Data::OpticalSide::Front, SolTrace::Data::DistributionType::GAUSSIAN, 0.0, 0.0);
+    mirror_optics_set.set_errors(SolTrace::Data::OpticalSide::Back, SolTrace::Data::DistributionType::GAUSSIAN, 0.0, 0.0);
+    auto optics_ref = my_sim.add_optical_property_set(mirror_optics_set);
 
     for (int k = 0; k < NUM_ELEMENTS; ++k)
     {
         element_ptr el = SolTrace::Data::make_element<SingleElement>();
         el->set_aperture(SolTrace::Data::make_aperture<Circle>(2.0));
         el->set_surface(SolTrace::Data::make_surface<Flat>());
-        el->set_reference_frame_geometry(Vector3d(x[k], y[k], 0.0),
-                                         Vector3d(-x[k], -y[k], 1.0),
+        el->set_reference_frame_geometry(glm::dvec3(x[k], y[k], 0.0),
+                                         glm::dvec3(-x[k], -y[k], 1.0),
                                          0.0);
-        el->set_front_optical_properties(optics);
-        el->set_back_optical_properties(optics);
+        el->set_optical_property_set(optics_ref);
         my_st->add_element(el);
     }
 
@@ -230,6 +241,62 @@ TEST(NativeRunner, SmokeTest)
               << std::endl;
 }
 
+TEST(NativeRunner, RaysLaunchedEqualsRequestedAfterRun)
+{
+    const uint_fast64_t NRAYS = 10;
+    NativeRunner runner;
+    SimulationData my_sim;
+
+    SimulationParameters &params = my_sim.get_simulation_parameters();
+    params.include_optical_errors = false;
+    params.include_sun_shape_errors = false;
+    params.number_of_rays = NRAYS;
+    params.max_number_of_rays = 10 * NRAYS;
+
+    auto sun = SolTrace::Data::make_ray_source<Sun>();
+    sun->set_position(0.0, 0.0, 100.0);
+    sun->set_shape(SolTrace::Data::SunShape::GAUSSIAN, 1.0, -5.0, 0.0);
+    my_sim.add_ray_source(sun);
+
+    auto my_st = SolTrace::Data::make_stage(0);
+    const int NUM_ELEMENTS = 4;
+    double x[NUM_ELEMENTS] = {1.0, 0.0, -1.0, 0.0};
+    double y[NUM_ELEMENTS] = {0.0, 1.0, 0.0, -1.0};
+    SolTrace::Data::OpticalPropertySet mirror_optics_set(SolTrace::Data::InteractionType::REFLECTION, "RaysLaunchedOptics");
+    mirror_optics_set.set_ideal_reflection(SolTrace::Data::OpticalSide::Both);
+    mirror_optics_set.set_reflectivity(SolTrace::Data::OpticalSide::Front, 1.0);
+    mirror_optics_set.set_reflectivity(SolTrace::Data::OpticalSide::Back, 1.0);
+    mirror_optics_set.set_errors(SolTrace::Data::OpticalSide::Front, SolTrace::Data::DistributionType::GAUSSIAN, 0.0, 0.0);
+    mirror_optics_set.set_errors(SolTrace::Data::OpticalSide::Back, SolTrace::Data::DistributionType::GAUSSIAN, 0.0, 0.0);
+    auto optics_ref = my_sim.add_optical_property_set(mirror_optics_set);
+    for (int k = 0; k < NUM_ELEMENTS; ++k)
+    {
+        element_ptr el = SolTrace::Data::make_element<SingleElement>();
+        el->set_aperture(SolTrace::Data::make_aperture<Circle>(2.0));
+        el->set_surface(SolTrace::Data::make_surface<Flat>());
+        el->set_reference_frame_geometry(glm::dvec3(x[k], y[k], 0.0),
+                                         glm::dvec3(-x[k], -y[k], 1.0),
+                                         0.0);
+        el->set_optical_property_set(optics_ref);
+        my_st->add_element(el);
+    }
+    my_sim.add_stage(my_st);
+
+    RunnerStatus sts = runner.initialize();
+    ASSERT_EQ(sts, RunnerStatus::SUCCESS);
+    sts = runner.setup_simulation(&my_sim);
+    ASSERT_EQ(sts, RunnerStatus::SUCCESS);
+
+    // Before running, SunRayCount has not been accumulated yet
+    EXPECT_EQ(runner.get_number_rays_launched(), static_cast<uint_fast64_t>(0));
+
+    sts = runner.run_simulation();
+    ASSERT_EQ(sts, RunnerStatus::SUCCESS);
+
+    EXPECT_GE(runner.get_number_rays_launched(), NRAYS);
+    EXPECT_EQ(runner.get_number_rays_traced(), NRAYS);
+}
+
 TEST(NativeRunner, PowerTowerSmokeTest)
 {
     SimulationData sd;
@@ -247,9 +314,10 @@ TEST(NativeRunner, PowerTowerSmokeTest)
     absorber->compute_coordinate_rotations();
     absorber->set_surface(SolTrace::Data::make_surface<Flat>()); // surface(nullptr)
     absorber->set_aperture(SolTrace::Data::make_aperture<Rectangle>(2.0, 2.0));
-    OpticalProperties *foptics = absorber->get_front_optical_properties();
-    foptics->my_type = InteractionType::REFLECTION;
-    foptics->reflectivity = 0.0;
+    SolTrace::Data::OpticalPropertySet absorber_optics(SolTrace::Data::InteractionType::REFLECTION, "Absorber");
+    absorber_optics.set_ideal_absorption(SolTrace::Data::OpticalSide::Both);
+    auto absorber_optics_ref = sd.add_optical_property_set(absorber_optics);
+    absorber->set_optical_property_set(absorber_optics_ref);
 
     // Make stage 1 -- second stage -- these can be added to SimulationData
     // in any order but should be numbered in the desired order
@@ -270,27 +338,25 @@ TEST(NativeRunner, PowerTowerSmokeTest)
     st0->set_origin(0.0, 0.0, 0.0);
     st0->set_aim_vector(0.0, 0.0, 1.0);
 
-    Vector3d rvec, svec, avec;
-    Vector3d aim, pos;
+    glm::dvec3 rvec, svec, avec;
+    glm::dvec3 aim, pos;
 
     const int NUM_ELEMENTS = 10;
     for (int k = 0; k < NUM_ELEMENTS; ++k)
     {
         auto el = SolTrace::Data::make_element<SingleElement>();
-        foptics = el->get_front_optical_properties();
-        foptics->reflectivity = 1.0;
+        SolTrace::Data::OpticalPropertySet mirror_optics(SolTrace::Data::InteractionType::REFLECTION, "Mirror");
+        mirror_optics.set_ideal_one_sided_reflector(SolTrace::Data::OpticalSide::Front);
+        mirror_optics.set_ideal_absorption(SolTrace::Data::OpticalSide::Back);
+        auto mirror_optics_ref = sd.add_optical_property_set(mirror_optics);
+        el->set_optical_property_set(mirror_optics_ref);
 
-        pos.set_values(5 * sin(k * PI * 2.0 / NUM_ELEMENTS),
-                       5 * cos(k * PI * 2.0 / NUM_ELEMENTS),
-                       0.0);
-        vector_add(1.0, absorber->get_origin_global(),
-                   -1.0, pos,
-                   rvec);
-        make_unit_vector(rvec);
-        svec = sun->get_position();
-        make_unit_vector(svec);
-        vector_add(0.5, rvec, 0.5, svec, avec);
-        vector_add(1.0, pos, 100.0, avec, aim);
+        pos = {5 * sin(k * PI * 2.0 / NUM_ELEMENTS), 5 * cos(k * PI * 2.0 / NUM_ELEMENTS), 0.0};
+        rvec = glm::normalize(absorber->get_origin_global() - pos);
+        svec = glm::normalize(sun->get_position());
+
+        avec = 0.5 * rvec + 0.5 * svec;
+        aim = pos + 100.0 * avec;
 
         el->set_reference_frame_geometry(pos, aim, 0.0);
 
@@ -375,12 +441,12 @@ TEST(NativeRunner, SingleRayValidationTest)
     double zref = R - sqrt(R * R - (x * x + y * y));
     double z = z0 - zref;
 
-    Vector3d u(0.0, 0.0, -1.0);
-    Vector3d v(2.0 * x, 2.0 * y, -2.0 * (z0 - z - R));
-    v.make_unit();
-    Vector3d w;
-    double alpha = dot_product(u, v);
-    vector_add(1.0, u, -2.0 * alpha, v, w);
+    glm::dvec3 u(0.0, 0.0, -1.0);
+    glm::dvec3 v(2.0 * x, 2.0 * y, -2.0 * (z0 - z - R));
+    SolTrace::Data::normalize_inplace(v);
+
+    double alpha = glm::dot(u, v);
+    glm::dvec3 w = u + (-2.0 * alpha * v);
 
     SimulationData sd;
 
@@ -400,24 +466,32 @@ TEST(NativeRunner, SingleRayValidationTest)
     sd.add_ray_source(sun);
 
     auto sph = SolTrace::Data::make_element<SingleElement>();
-    Vector3d origin(0.0, 0.0, z0);
-    Vector3d aim(0.0, 0.0, -1.0);
+    glm::dvec3 origin(0.0, 0.0, z0);
+    glm::dvec3 aim(0.0, 0.0, -1.0);
     double zrot = 0.0;
     sph->set_reference_frame_geometry(origin, aim, zrot);
     sph->set_aperture(SolTrace::Data::make_aperture<Hexagon>(20.0));
     sph->set_surface(SolTrace::Data::make_surface<Sphere>(c));
-    sph->get_front_optical_properties()->set_ideal_reflection();
-    sph->get_back_optical_properties()->set_ideal_reflection();
+    SolTrace::Data::OpticalPropertySet sphere_optics(SolTrace::Data::InteractionType::REFLECTION, "Sphere");
+    sphere_optics.set_ideal_reflection(SolTrace::Data::OpticalSide::Both);
+    sphere_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 0.0, 0.0);
+    auto sphere_optics_ref = sd.add_optical_property_set(sphere_optics);
+    sph->set_optical_property_set(sphere_optics_ref);
     sph->set_name("Sphere");
     sd.add_element(sph);
 
     auto para = SolTrace::Data::make_element<SingleElement>();
-    origin.set_values(0.0, 0.0, -1.0);
-    aim.set_values(0.0, 0.0, 0.0);
+    origin = {0.0, 0.0, -1.0};
+    aim = {};
     zrot = 0.0;
     para->set_reference_frame_geometry(origin, aim, zrot);
     para->set_aperture(SolTrace::Data::make_aperture<Rectangle>(31.0, 31.0));
     para->set_surface(SolTrace::Data::make_surface<Parabola>(0.5 / 0.03, 0.5 / 0.03));
+    SolTrace::Data::OpticalPropertySet parabola_optics(SolTrace::Data::InteractionType::REFLECTION, "Parabola");
+    parabola_optics.set_ideal_absorption(SolTrace::Data::OpticalSide::Both);
+    parabola_optics.set_errors(SolTrace::Data::OpticalSide::Both, SolTrace::Data::DistributionType::NONE, 0.0, 0.0);
+    auto parabola_optics_ref = sd.add_optical_property_set(parabola_optics);
+    para->set_optical_property_set(parabola_optics_ref);
     para->set_name("Parabola");
     sd.add_element(para);
 
@@ -438,12 +512,11 @@ TEST(NativeRunner, SingleRayValidationTest)
 
     EXPECT_EQ(n, 3);
 
-    Vector3d ipoint, idir;
+    glm::dvec3 ipoint, idir;
     int element, stage;
     uint_fast64_t raynum;
     SolTrace::Result::RayEvent rev;
-    sys->RayData.Query(0, ipoint.data, idir.data,
-                       &element, &stage, &raynum, &rev);
+    sys->RayData.Query(0, ipoint, idir, &element, &stage, &raynum, &rev);
 
     EXPECT_EQ(raynum, 1);
     EXPECT_EQ(rev, SolTrace::Result::RayEvent::CREATE);
@@ -456,8 +529,7 @@ TEST(NativeRunner, SingleRayValidationTest)
     EXPECT_NEAR(idir[1], u[1], TOL);
     EXPECT_NEAR(idir[2], u[2], TOL);
 
-    sys->RayData.Query(1, ipoint.data, idir.data,
-                       &element, &stage, &raynum, &rev);
+    sys->RayData.Query(1, ipoint, idir, &element, &stage, &raynum, &rev);
 
     EXPECT_EQ(raynum, 1);
     EXPECT_EQ(rev, SolTrace::Result::RayEvent::REFLECT);
@@ -534,7 +606,13 @@ TEST(NativeRunner, StatusAndCancelSingleThread)
     std::chrono::duration<double, std::milli> dur = t1 - t0;
 
     EXPECT_EQ(fsts.get(), RunnerStatus::CANCEL);
+
+    // succeeds in release, fails in some coverage tests
+#ifndef NDEBUG
+    EXPECT_LT(dur.count(), 10000.0);
+#else
     EXPECT_LT(dur.count(), 2000.0);
+#endif
 
     std::cout << "Time for run: " << dur.count() << std::endl;
     std::cout << "Progress before cancel: " << prog << std::endl;

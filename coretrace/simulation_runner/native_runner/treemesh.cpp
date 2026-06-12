@@ -225,7 +225,10 @@ st_tree_node *st_tree_node::m_proc(std::string &key, int index)
     char c;
     try
     {
-        c = key.at(index);
+        if (index <= key.length() - 1)
+            c = key.at(index);
+        else 
+            return this;
     }
     catch (...)
     {

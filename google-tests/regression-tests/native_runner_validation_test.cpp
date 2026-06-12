@@ -7,8 +7,11 @@
 #include <simulation_data_export.hpp>
 #include <simulation_result_export.hpp>
 
-#include "split_csv.h"
+#define GLM_ENABLE_EXPERIMENTAL 1
+#include <glm/gtx/io.hpp>
 
+#include "common.hpp"
+#include "split_csv.h"
 
 using SolTrace::Runner::RunnerStatus;
 
@@ -147,9 +150,9 @@ TEST(NativeRunner, ValidationTest1)
     EXPECT_EQ(sts, RunnerStatus::SUCCESS);
     EXPECT_EQ(result.get_number_of_records(), NRAYS);
 
-    Vector3d point, cosines;
-    Vector3d pos_stage, dir_stage;
-    Vector3d temp;
+    glm::dvec3 point, cosines;
+    glm::dvec3 pos_stage, dir_stage;
+    glm::dvec3 temp;
     int_fast64_t element;
     int_fast64_t stage;
     uint_fast64_t rayidx;
@@ -173,14 +176,6 @@ TEST(NativeRunner, ValidationTest1)
         // Legacy SolTrace and CSV file had 1-based ray IDs. SimulationResult
         // has 0-based ray ID's so subtract 1 here.
         rayidx = stoul(ground_raydata[8][i]) - 1;
-
-        if (stage == 3)
-        {
-            // TODO: Stage 3 is virtual in the input file but
-            // that has not been implemented yet. Remove after
-            // implementing this.
-            continue;
-        }
 
         const ray_record_ptr rr = result[rayidx];
         if (element > 0)
@@ -210,6 +205,11 @@ TEST(NativeRunner, ValidationTest1)
                 EXPECT_NE(rr->get_event(iidx), RayEvent::CREATE);
                 EXPECT_NE(rr->get_event(iidx), RayEvent::ABSORB);
                 EXPECT_NE(rr->get_event(iidx), RayEvent::EXIT);
+
+                if (rr->get_event(iidx) == RayEvent::ABSORB)
+                {
+                    break;
+                }
             }
             else
             {
@@ -276,6 +276,64 @@ TEST(NativeRunner, ValidationTest1)
         // See previous comment about coordinates
         el->convert_vector_global_to_reference(dir_stage, cosines);
 
+#if 0
+        {
+            glm::dvec3 local;
+            el->convert_global_to_local(local, point);
+            el->convert_local_to_stage(pos_stage, local);
+
+            glm::dvec3 dir_local;
+            el->convert_vector_global_to_local(dir_local, cosines);
+            el->convert_vector_local_to_stage(dir_stage, dir_local);
+
+            {
+                glm::dvec3 pos_alt = el->get_reference_to_local() * point;
+                glm::dvec3 dir_alt = el->get_reference_to_local() * cosines;
+                glm::dvec3 pos_alt_t = glm::transpose(el->get_reference_to_local()) * point;
+                glm::dvec3 dir_alt_t = glm::transpose(el->get_reference_to_local()) * cosines;
+
+                std::cout << "CSV Line: " << i + 1 << "\nRay Number: " << rayidx + 1
+                          << "\nElement: " << rr->get_element(iidx) << " CSV Element: " << element
+                          << " Runner Element: " << run_element << "\nCSV Stage: " << stage
+                          << " Runner Stage: " << run_stage << "\nCSV Pos: ["
+                          << ground_raydata[0][i] << ", " << ground_raydata[1][i] << ", "
+                          << ground_raydata[2][i] << "]"
+                          << "\nCSV Dir: [" << ground_raydata[3][i] << ", " << ground_raydata[4][i]
+                          << ", " << ground_raydata[5][i] << "]"
+                          << "\nPos Stage (current): " << pos_stage
+                          << "\nDir Stage (current): " << dir_stage
+                          << "\nPos Alt (RRefToLoc * global): " << pos_alt
+                          << "\nDir Alt (RRefToLoc * global): " << dir_alt
+                          << "\nPos Alt T (RRefToLoc^T * global): " << pos_alt_t
+                          << "\nDir Alt T (RRefToLoc^T * global): " << dir_alt_t
+                          << "\nREF_T_L: " << el->get_reference_to_local()
+                          << "\nGLO_T_L: " << el->get_global_to_local() << std::endl;
+
+                std::cout << pos_stage << point << std::endl;
+                std::cout << el->get_reference_to_local() << std::endl;
+                std::cout << el->get_origin_ref() << std::endl;
+                std::cout << el->get_aim_vector_ref() << std::endl;
+                std::cout << el->get_zrot() << std::endl;
+                std::cout << "BLAH\n";
+                std::cout << el->get_origin_global() << std::endl;
+                std::cout << el->get_aim_vector_global() << std::endl;
+
+                std::cout << "OMG\n";
+                std::cout << local << std::endl;
+                std::cout << dir_local << std::endl;
+
+                if (el->get_reference_element()) {
+                    std::cout << "REF\n";
+                    auto e = el->get_reference_element();
+
+                    std::cout << e->get_origin_ref() << std::endl;
+                    std::cout << e->get_aim_vector_ref() << std::endl;
+                    std::cout << e->get_zrot() << std::endl;
+                }
+            }
+        }
+#endif
+
         EXPECT_NEAR(pos_stage[0], stod(ground_raydata[0][i]), TOL);
         EXPECT_NEAR(pos_stage[1], stod(ground_raydata[1][i]), TOL);
         EXPECT_NEAR(pos_stage[2], stod(ground_raydata[2][i]), TOL);
@@ -286,17 +344,17 @@ TEST(NativeRunner, ValidationTest1)
 
         // if (fabs(pos_stage[0] - stod(ground_raydata[0][i]) > TOL))
         // {
-        //     Vector3d pos_csv(stod(ground_raydata[0][i]),
+        //     glm::dvec3 pos_csv(stod(ground_raydata[0][i]),
         //                      stod(ground_raydata[1][i]),
         //                      stod(ground_raydata[2][i]));
-        //     Vector3d dir_csv(stod(ground_raydata[3][i]),
+        //     glm::dvec3 dir_csv(stod(ground_raydata[3][i]),
         //                      stod(ground_raydata[4][i]),
         //                      stod(ground_raydata[5][i]));
 
-        //     Vector3d pos_loc;
-        //     Vector3d dir_loc;
+        //     glm::dvec3 pos_loc;
+        //     glm::dvec3 dir_loc;
 
-        //     Vector3d csv_glob;
+        //     glm::dvec3 csv_glob;
         //     el->convert_stage_to_local(temp, pos_csv);
         //     el->convert_local_to_global(csv_glob, temp);
 
@@ -354,14 +412,31 @@ TEST(NativeRunner, ValidationTest2)
     // Constants
     const uint_fast64_t NRAYS = 50000;
     const double TOL = 1e-4;
+    element_id absorber_id = 6285;
 
     // Read Input File
     bool success = sd.import_from_file(sample_path);
-    EXPECT_TRUE(success);
-    EXPECT_TRUE(sd.get_number_of_elements() > 0);
-    EXPECT_TRUE(sd.get_number_of_ray_sources() > 0);
+    ASSERT_TRUE(success);
+    ASSERT_TRUE(sd.get_number_of_elements() > 0);
+    ASSERT_TRUE(sd.get_number_of_ray_sources() > 0);
 
     std::cout << "Num Elements: " << sd.get_number_of_elements() << std::endl;
+
+    // Change the location of the absorber to account for difference in origin
+    // of cylinder in new and legacy. Local z-axis of the absorber is aligned
+    // with the global y-axis so the offset to add the radius of the cylinder
+    // in the positive y-axis direction.
+    auto absorb = sd.get_element(absorber_id);
+    ASSERT_TRUE(absorb->get_surface()->get_type() == SurfaceType::CYLINDER);
+    auto surf = std::dynamic_pointer_cast<Cylinder>(absorb->get_surface());
+    ASSERT_TRUE(surf != nullptr);
+    double r = surf->radius;
+    glm::dvec3 offset(0.0, r, 0.0);
+    glm::dvec3 oref = absorb->get_origin_ref();
+    oref = oref + offset;
+    glm::dvec3 aref = absorb->get_aim_vector_ref();
+    aref = aref + offset;
+    absorb->set_reference_frame_geometry(oref, aref, 0.0);
 
     // Parameters
     SimulationParameters &params = sd.get_simulation_parameters();
@@ -378,7 +453,7 @@ TEST(NativeRunner, ValidationTest2)
     //     auto elem = cit->second;
     //     if (elem->is_stage())
     //     {
-    //         stage_ptr st = dynamic_pointer_cast<StageElement>(elem);
+    //         stage_ptr st = std::dynamic_pointer_cast<StageElement>(elem);
     //         assert(st != nullptr);
     //         std::cout << "Stage: " << st->get_stage()
     //                   << "\nNumber of elements: "
@@ -388,9 +463,9 @@ TEST(NativeRunner, ValidationTest2)
     //         {
     //             auto el = st->get_const_iterator()->second;
 
-    //             auto surf = dynamic_pointer_cast<Cylinder>(el->get_surface());
+    //             auto surf = std::dynamic_pointer_cast<Cylinder>(el->get_surface());
     //             assert(surf != nullptr);
-    //             auto ap = dynamic_pointer_cast<Rectangle>(el->get_aperture());
+    //             auto ap = std::dynamic_pointer_cast<Rectangle>(el->get_aperture());
     //             assert(ap != nullptr);
 
     //             std::cout << "------------\n"
@@ -449,7 +524,9 @@ TEST(NativeRunner, ValidationTest2)
     EXPECT_EQ(sts, RunnerStatus::SUCCESS);
 
     std::chrono::duration<double, std::milli> dur = t1 - t0;
+#ifdef NDEBUG
     EXPECT_TRUE(dur.count() < 75000.0);
+#endif
 
     std::cout << "Time: " << dur.count() << " ms" << std::endl;
 
@@ -464,7 +541,6 @@ TEST(NativeRunner, ValidationTest2)
     EXPECT_EQ(sts, RunnerStatus::SUCCESS);
     EXPECT_EQ(result.get_number_of_records(), NRAYS);
 
-    element_id absorber_id = 6285;
     int_fast64_t nabsorbed = count_element_event(result, absorber_id, RayEvent::ABSORB);
     int_fast64_t nreflect = count_element_event(result, absorber_id, RayEvent::REFLECT);
     int_fast64_t nevents = nabsorbed + nreflect;
@@ -478,9 +554,9 @@ TEST(NativeRunner, ValidationTest2)
 
     // result.write_csv_file("native_runner_result_dump.csv");
 
-    Vector3d point, cosines;
-    Vector3d pos_stage, dir_stage;
-    Vector3d temp;
+    glm::dvec3 point, cosines;
+    glm::dvec3 pos_stage, dir_stage;
+    glm::dvec3 temp;
     int_fast64_t element;
     int_fast64_t stage;
     uint_fast64_t rayidx;
@@ -620,7 +696,7 @@ TEST(NativeRunner, ValidationTest2)
         // See previous comment about coordinates
         el->convert_vector_global_to_reference(dir_stage, cosines);
 
-        RTOL = vector_norm(pos_stage) * TOL;
+        RTOL = glm::length(pos_stage) * TOL;
         EXPECT_NEAR(pos_stage[0], stod(ground_raydata[0][i]), RTOL);
         EXPECT_NEAR(pos_stage[1], stod(ground_raydata[1][i]), RTOL);
         EXPECT_NEAR(pos_stage[2], stod(ground_raydata[2][i]), RTOL);
@@ -643,19 +719,20 @@ TEST(NativeRunner, ValidationTest2)
             break;
         }
 
+        // -------- Test Debugging Code -------- //
         // if (fabs(pos_stage[0] - stod(ground_raydata[0][i]) > TOL))
         // {
-        //     Vector3d pos_csv(stod(ground_raydata[0][i]),
+        //     glm::dvec3 pos_csv(stod(ground_raydata[0][i]),
         //                      stod(ground_raydata[1][i]),
         //                      stod(ground_raydata[2][i]));
-        //     Vector3d dir_csv(stod(ground_raydata[3][i]),
+        //     glm::dvec3 dir_csv(stod(ground_raydata[3][i]),
         //                      stod(ground_raydata[4][i]),
         //                      stod(ground_raydata[5][i]));
 
-        //     Vector3d pos_loc;
-        //     Vector3d dir_loc;
+        //     glm::dvec3 pos_loc;
+        //     glm::dvec3 dir_loc;
 
-        //     Vector3d csv_glob;
+        //     glm::dvec3 csv_glob;
         //     el->convert_stage_to_local(temp, pos_csv);
         //     el->convert_local_to_global(csv_glob, temp);
 

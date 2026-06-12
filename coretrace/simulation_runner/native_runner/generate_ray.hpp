@@ -6,14 +6,17 @@
 
 namespace SolTrace::NativeRunner {
 
-void GenerateRay(MTRand &myrng,
-                 const double PosSunStage[3],
-                 double Origin[3],
-                 double RLocToRef[3][3],
-                 TSun *Sun,
-                 double PosRayGlobal[3],
-                 double CosRayGlobal[3],
-                 double PosRaySun[3]);
+void GenerateRay(MTRand& myrng,
+                 const glm::dvec3& PosSunStage,
+                 glm::dvec3& Origin,
+                 glm::dmat3& RLocToRef,
+                 TSun* Sun,
+                 uint_fast64_t sample_index,
+                 glm::dvec3& PosRayGlobal,
+                 glm::dvec3& CosRayGlobal,
+                 glm::dvec3& PosRaySun,
+                 int& ErrorFlag);
+
 
 } // namespace SolTrace::NativeRunner
 

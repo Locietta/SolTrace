@@ -99,24 +99,23 @@ TEST(SphereCalculator, ConstructorValid)
 TEST(SphereCalculator, Case1)
 {
     // Delta < 0 -- returns no solution
-    Vector3d r0(3.0, -1.0, 1.0);
-    Vector3d rd(-3.0, 1.0, -2.0);
+    glm::dvec3 r0(3.0, -1.0, 1.0);
+    glm::dvec3 rd(-3.0, 1.0, -2.0);
     double radius = 1.0;
 
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -129,24 +128,24 @@ TEST(SphereCalculator, Case2)
     // t1 > 0 -- returns t1
     const double TOL = 1e-12;
     
-    Vector3d r0(3.0, -1.0, 1.0);
-    Vector3d rd(-3.0, 1.0, -0.5);
+    glm::dvec3 r0(3.0, -1.0, 1.0);
+    glm::dvec3 rd(-3.0, 1.0, -0.5);
     double radius = 1.0;
     double T = 0.5 * (20 - sqrt(31)) / 10.25;
-    Vector3d s0(0.0, 0.0, radius);
+    glm::dvec3 s0(0.0, 0.0, radius);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
-    Vector3d r;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
+    glm::dvec3 r;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
 
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
@@ -158,8 +157,8 @@ TEST(SphereCalculator, Case2)
     EXPECT_NEAR(gradf[1], -2.0 * (rd[1] * T + r0[1]), TOL);
     EXPECT_NEAR(gradf[2], -2.0 * (rd[2] * T + r0[2] - radius), TOL);
 
-    vector_add(1.0, xt, -1.0, s0, r);
-    EXPECT_NEAR(vector_norm(r), radius, TOL);
+    r = xt - s0;
+    EXPECT_NEAR(glm::length(r), radius, TOL);
 }
 
 TEST(SphereCalculator, Case3)
@@ -167,24 +166,24 @@ TEST(SphereCalculator, Case3)
     // t1 > 0, z1 > r, t2 > 0, z2 < r -- returns t2
     const double TOL = 1e-12;
     
-    Vector3d r0(3.0, -1.0, 2.0);
-    Vector3d rd(-3.0, 1.0, -1.0);
+    glm::dvec3 r0(3.0, -1.0, 2.0);
+    glm::dvec3 rd(-3.0, 1.0, -1.0);
     double radius = 1.0;
     double T = 0.5 * (22 + sqrt(44)) / 11;
-    Vector3d s0(0.0, 0.0, radius);
+    glm::dvec3 s0(0.0, 0.0, radius);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
-    Vector3d r;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
+    glm::dvec3 r;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
 
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
@@ -196,31 +195,30 @@ TEST(SphereCalculator, Case3)
     EXPECT_NEAR(gradf[1], -2.0 * (rd[1] * T + r0[1]), TOL);
     EXPECT_NEAR(gradf[2], -2.0 * (rd[2] * T + r0[2] - radius), TOL);
 
-    vector_add(1.0, xt, -1.0, s0, r);
-    EXPECT_NEAR(vector_norm(r), radius, TOL);
+    r = xt - s0;
+    EXPECT_NEAR(glm::length(r), radius, TOL);
 }
 
 TEST(SphereCalculator, Case4)
 {
     // t1, t2 > 0, z1, z2 > r -- returns no solution
-    Vector3d r0(3.0, -1.0, 2.0);
-    Vector3d rd(-3.0, 1.0, -0.5);
+    glm::dvec3 r0(3.0, -1.0, 2.0);
+    glm::dvec3 rd(-3.0, 1.0, -0.5);
     double radius = 1.0;
 
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -233,22 +231,22 @@ TEST(SphereCalculator, Case5)
     // t1 < 0, t2 > 0, z2 < r -- returns t2
     const double TOL = 1e-12;
     
-    Vector3d r0(-0.5, 0.5, 0.5);
-    Vector3d rd(-3.0, 1.0, -0.5);
+    glm::dvec3 r0(-0.5, 0.5, 0.5);
+    glm::dvec3 rd(-3.0, 1.0, -0.5);
     double radius = 1.0;
     double T = 0.5 * (-4.5 + sqrt(30.5)) / 10.25;
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
 
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);
@@ -264,24 +262,23 @@ TEST(SphereCalculator, Case5)
 TEST(SphereCalculator, Case6)
 {
     // t1 < 0, t2 > 0, z2 > r -- returns no intersection
-    Vector3d r0(-0.5, 0.5, 0.5);
-    Vector3d rd(-1.0, 1.0, 5.0);
+    glm::dvec3 r0(-0.5, 0.5, 0.5);
+    glm::dvec3 rd(-1.0, 1.0, 5.0);
     double radius = 1.0;
 
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -292,24 +289,23 @@ TEST(SphereCalculator, Case6)
 TEST(SphereCalculator, Case7)
 {
     // t1 < 0, t2 < 0 -- returns no intersection
-    Vector3d r0(-0.5, 0.5, 3.0);
-    Vector3d rd(-1.0, 1.0, 5.0);
+    glm::dvec3 r0(-0.5, 0.5, 3.0);
+    glm::dvec3 rd(-1.0, 1.0, 5.0);
     double radius = 1.0;
 
-    Vector3d zero;
-    zero.zero();
+    glm::dvec3 zero(0.0);
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
     EXPECT_EQ(sts, 1);
     EXPECT_EQ(t, 0.0);
     EXPECT_TRUE(is_identical(xt, zero));
@@ -322,22 +318,22 @@ TEST(SphereCalculator, Case8)
     // t1 == t2 > 0 -- returns t1
     const double TOL = 1e-12;
     
-    Vector3d r0(-1.0, -1.0, 0.0);
-    Vector3d rd(1.0, 1.0, 0.0);
+    glm::dvec3 r0(-1.0, -1.0, 0.0);
+    glm::dvec3 rd(1.0, 1.0, 0.0);
     double radius = 1.0;
     double T = 0.5 * (4.0 - sqrt(0)) / 2;
 
     // Solution values
     int sts;
     double t;
-    Vector3d xt;
-    Vector3d mt;
-    Vector3d gradf;
+    glm::dvec3 xt;
+    glm::dvec3 mt;
+    glm::dvec3 gradf;
     
     surface_ptr sph = make_surface<Sphere>(1.0 / radius);
     auto circ = create_circle_aperture(radius);
     SphereCalculator scalc(sph, circ);
-    sts = scalc.intersect(r0.data, rd.data, xt.data, mt.data, gradf.data, &t);
+    sts = scalc.intersect(r0, rd, xt, mt, gradf, &t);
 
     EXPECT_EQ(sts, 0);
     EXPECT_NEAR(t, T, TOL);

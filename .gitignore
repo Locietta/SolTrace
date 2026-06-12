@@ -277,6 +277,7 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+.vscode/
 
 # Cake - Uncomment if you are using it
 # tools/**
@@ -316,3 +317,7 @@ build*
 google-tests/*.stinput
 google-tests/*.mon
 google-tests/*.csv
+
+**/*.DS_Store
+**/strace
+**/straced

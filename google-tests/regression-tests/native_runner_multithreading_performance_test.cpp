@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <iostream>
 #include <string>
 
@@ -7,6 +8,10 @@
 #include <simulation_data_export.hpp>
 #include <simulation_result_export.hpp>
 #include <simulation_runner.hpp>
+
+#include "common.hpp"
+
+using SolTrace::Result::RayEvent;
 
 TEST(NativeRunner, Multithreading)
 {
@@ -59,15 +64,23 @@ TEST(NativeRunner, Multithreading)
 
     EXPECT_TRUE(dur.count() < 20000.0);
 
-    // element_id absorber_id = 6285;
-    // int_fast64_t nabsorbed = count_element_event(result, absorber_id, RayEvent::ABSORB);
-    // int_fast64_t nreflect = count_element_event(result, absorber_id, RayEvent::REFLECT);
-    // int_fast64_t nevents = nabsorbed + nreflect;
+    SimulationResult result;
+    sts = nr.report_simulation(&result, 0);
+    EXPECT_EQ(sts, SolTrace::Runner::RunnerStatus::SUCCESS);
 
-    // std::cout << "Total: " << nevents
-    //           << "\nAbsorb: " << nabsorbed << " ("
-    //           << static_cast<double>(nabsorbed) / nevents << ")"
-    //           << "\nReflect: " << nreflect << " ("
-    //           << static_cast<double>(nreflect) / nevents << ")"
-    //           << std::endl;
+    element_id absorber_id = 6285;
+    int_fast64_t nabsorbed = count_element_event(result, absorber_id, RayEvent::ABSORB);
+    int_fast64_t nreflect = count_element_event(result, absorber_id, RayEvent::REFLECT);
+    int_fast64_t nevents = nabsorbed + nreflect;
+
+    std::cout << "Total: " << nevents
+              << "\nAbsorb: " << nabsorbed << " ("
+              << static_cast<double>(nabsorbed) / nevents << ")"
+              << "\nReflect: " << nreflect << " ("
+              << static_cast<double>(nreflect) / nevents << ")"
+              << std::endl;
+
+    EXPECT_GT(nevents, 0);
+    EXPECT_GT(nabsorbed, 0);
+    EXPECT_GT(nreflect, 0);
 }
