@@ -8,7 +8,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if(MSVC)
-	add_compile_options(/utf-8)
+	# Scope to C/C++ only: nvcc would mistake the slash-prefixed /utf-8 for an
+	# input file. Forward it to the MSVC host compiler for CUDA sources instead.
+	add_compile_options(
+		$<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>
+		$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/utf-8>
+	)
 endif()
 
 if(WIN32)

@@ -64,10 +64,11 @@ target_link_libraries(OptixCSP_core
     PRIVATE CUDA::cuda_driver
             CUDA::cudart)
 
-# have to specify the Optix_INCLUDE directory for the CUDA compiler 
+# have to specify the Optix_INCLUDE directory for the CUDA compiler
 target_compile_options(OptixCSP_core PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -lineinfo -I"${OptiX_INCLUDE}">
+    $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -lineinfo>
 )
+target_include_directories(OptixCSP_core PRIVATE "${OptiX_INCLUDE}")
 # ---------------------------------------------------------------------------
 # shaders target
 # ---------------------------------------------------------------------------
@@ -84,6 +85,10 @@ file(MAKE_DIRECTORY "${PTX_OUTPUT_DIR}")
 
 message(STATUS "PTX output directory: ${PTX_OUTPUT_DIR}")
 
+# Forward user-provided CUDA flags (e.g. -allow-unsupported-compiler) to the
+# hand-rolled nvcc invocation below, which bypasses the CUDA language rules.
+separate_arguments(OPTIXCSP_PTX_EXTRA_FLAGS NATIVE_COMMAND "${CMAKE_CUDA_FLAGS}")
+
 foreach(shader ${SHADERS})
     set(SHADER_SRC ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader}.cu)
     set(SHADER_PTX ${PTX_OUTPUT_DIR}/${shader}.ptx)
@@ -91,6 +96,7 @@ foreach(shader ${SHADERS})
     add_custom_command(
         OUTPUT ${SHADER_PTX}
         COMMAND ${CMAKE_CUDA_COMPILER}
+            ${OPTIXCSP_PTX_EXTRA_FLAGS}
             --use_fast_math
             -lineinfo
             -std=c++17

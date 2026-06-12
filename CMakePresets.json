@@ -50,7 +50,8 @@
       "inherits": "base",
       "generator": "Ninja Multi-Config",
       "cacheVariables": {
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "CMAKE_CUDA_FLAGS": "-allow-unsupported-compiler"
       }
     },
     {
