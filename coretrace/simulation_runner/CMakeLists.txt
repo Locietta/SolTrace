@@ -23,18 +23,15 @@ if (SOLTRACE_BUILD_OPTIX_SUPPORT)
         message(STATUS "  CUDA toolkit version:    ${CUDAToolkit_VERSION}")
         message(STATUS "  CUDA toolkit root dir:   ${CUDAToolkit_LIBRARY_ROOT}")
 
+        if(NOT TARGET OptixCSP::OptixCSP_core AND TARGET OptixCSP_core)
+            add_library(OptixCSP::OptixCSP_core ALIAS OptixCSP_core)
+        endif()
 
-        # now that i found cuda and optix, let's find OptixCSP
-        set(OptixCSP_DIR "" CACHE PATH "Path to the OptixCSP/build/cmake")
-        find_package(OptixCSP)
-
-
-        if (OptixCSP_FOUND)
-            message(STATUS "OptixCSP found, adding optix_runner")
+        if(TARGET OptixCSP::OptixCSP_core)
+            message(STATUS "OptixCSP target 'OptixCSP::OptixCSP_core' available, adding optix_runner")
             add_subdirectory(optix_runner)
-
         else()
-            message(STATUS "OptixCSP not found. Skipping optix_runner. Please set OptixCSP_DIR in cmake-gui or with -DOptixCSP_DIR=/path.")
+            message(FATAL_ERROR "OptixCSP target missing. Ensure external/OptixCSP is available and configured before enabling SOLTRACE_BUILD_OPTIX_SUPPORT.")
         endif()
 
 

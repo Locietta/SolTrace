@@ -21,9 +21,9 @@ option(SOLTRACE_BUILD_PERF_TEST "Build performance tests (not built for debug)" 
 
 enable_testing()
 
+add_subdirectory(external)
 add_subdirectory(coretrace)
 add_subdirectory(google-tests)
-add_subdirectory(external)
 
 if(SOLTRACE_BUILD_GUI)
 	add_subdirectory(app)

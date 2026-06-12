@@ -16,7 +16,8 @@
         "WEXDIR": "${sourceDir}/external/wex"
       },
       "cacheVariables": {
-        "SAM_SKIP_TOOLS": "ON"
+        "SAM_SKIP_TOOLS": "ON",
+        "SOLTRACE_BUILD_OPTIX_SUPPORT": "ON"
       }
     },
     {
