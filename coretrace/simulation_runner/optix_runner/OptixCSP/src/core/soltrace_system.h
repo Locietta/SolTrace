@@ -94,6 +94,13 @@ namespace OptixCSP
 
         void set_seed(uint64_t seed) { m_seed = seed; } // Set sun seed
 
+        /// Re-seed the RNG for the next run() without re-initializing.
+        /// set_seed() only takes effect at initialize() (which copies the seed
+        /// into the launch params); this also pushes the seed into the live
+        /// launch parameters, so consecutive run() calls on an already-initialized
+        /// system produce statistically independent ray sets.
+        void set_runtime_seed(uint64_t seed);
+
         void set_optical_errors(bool include_optical_errors)
         {
             m_optical_errors = include_optical_errors;

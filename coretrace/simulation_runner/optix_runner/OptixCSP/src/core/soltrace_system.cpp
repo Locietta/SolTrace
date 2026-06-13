@@ -316,6 +316,16 @@ void SolTraceSystem::initialize()
     m_timer_setup.stop();
 }
 
+void SolTraceSystem::set_runtime_seed(uint64_t seed)
+{
+    m_seed = seed;
+    // initialize() copies m_seed into the launch params; run() does not. If the
+    // system is already initialized, push the seed into the live launch params
+    // so the next run() picks it up without a full (expensive) re-initialize.
+    if (data_manager)
+        data_manager->launch_params_H.sun_dir_seed = seed;
+}
+
 void SolTraceSystem::run()
 {
     // Initialize results

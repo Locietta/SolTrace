@@ -15,6 +15,12 @@ add_subdirectory(simulation_results)
 add_subdirectory(simulation_runner)
 add_subdirectory(simdriver)
 
+# fluxdriver is an OptiX flux-map tool; it needs the optix_runner target which
+# only exists when OptiX support is enabled.
+if(SOLTRACE_BUILD_OPTIX_SUPPORT)
+    add_subdirectory(fluxdriver)
+endif()
+
 #####################################################################################################################
 #
 # Project Settings
